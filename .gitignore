@@ -1,15 +1,35 @@
+# dependencies
 node_modules/
 .pnpm-store/
+
+# env files
 .env
 .env.local
 .env.*.local
-coverage/
+
+# hardhat
 artifacts/
 cache/
 typechain-types/
+
+# build outputs
 dist/
+coverage/
+
+# frontend
 frontend/.next/
 frontend/node_modules/
 frontend/.env.local
-.tmp/
 
+# logs
+*.log
+
+# temp files
+tmp/
+.tmp/
+*.tmp
+
+# editor & OS
+.vscode/
+.DS_Store
+Thumbs.db
