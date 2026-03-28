@@ -1,0 +1,62 @@
+ ⚠ Found lockfile missing swc dependencies, patching...
+ ⨯ Failed to patch lockfile, please try uninstalling and reinstalling next in this workspace
+TypeError: Cannot read properties of undefined (reading 'os')
+    at fetchPkgInfo (D:\FHE\node_modules\.pnpm\next@14.2.35_react-dom@18.3.1_react@18.3.1__react@18.3.1\node_modules\next\dist\lib\patch-incorrect-lockfile.js:73:25)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Promise.all (index 7)
+    at async patchIncorrectLockfile (D:\FHE\node_modules\.pnpm\next@14.2.35_react-dom@18.3.1_react@18.3.1__react@18.3.1\node_modules\next\dist\lib\patch-incorrect-lockfile.js:162:26)
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.
+ ⚠ Circular dependency between chunks with runtime (_app-pages-browser_node_modules_pnpm_cofhe_sdk_0_4_0__nomicfoun_e81be0c063065aafc791bc03cd85c-2ee100, _app-pages-browser_node_modules_pnpm_tfhe_0_11_1_node_modules_tfhe_snippets_wasm-bindgen-rayo-70423e, webpack)
+This prevents using hashes of each other and should be avoided.
+
+Circular dependency between chunks with runtime (0, 1, webpack-runtime)
+This prevents using hashes of each other and should be avoided.

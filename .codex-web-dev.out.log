@@ -1,0 +1,37 @@
+
+> fhe-casino-frontend@ dev D:\FHE\frontend
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 12.8s
+ ○ Compiling /[game] ...
+ GET /mines 200 in 14098ms
+ GET /favicon.ico 404 in 973ms
+ HEAD /mines 200 in 708ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 5419ms
+ GET /_next/static/chunks/app/%5Bgame%5D/LayoutGroupContext.mjs.map 404 in 4286ms
+ HEAD /mines 200 in 189ms
+ GET /mines 200 in 575ms
+ GET /mines 200 in 61ms
+ HEAD /mines 200 in 65ms
+ GET /mines 200 in 42ms
+ HEAD /mines 200 in 43ms
+ GET /favicon.ico 404 in 114ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 5475ms
+ GET /_next/static/chunks/app/%5Bgame%5D/LayoutGroupContext.mjs.map 404 in 4517ms
+ HEAD /mines 200 in 392ms
+ GET /mines 200 in 41ms
+ GET /mines 200 in 65ms
+ HEAD /mines 200 in 59ms
+ GET /mines 200 in 44ms
+ HEAD /mines 200 in 59ms
+ HEAD /mines 200 in 56ms
+ HEAD /mines 200 in 51ms
+ GET /_next/static/chunks/app/%5Bgame%5D/LayoutGroupContext.mjs.map 404 in 7233ms
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 8612ms
+ GET /_next/static/chunks/app/casino/LayoutGroupContext.mjs.map 404 in 7125ms
+ ELIFECYCLE  Command failed with exit code 3221225786.
