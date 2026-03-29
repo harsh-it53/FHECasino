@@ -1,9 +1,12 @@
 # Sepolia Runbook
 
-Sepolia remains useful for deployment plumbing and cross-chain validation, but our live gameplay
-smoke test currently hits `RandomFunctionNotSupported()` on the session-open randomness path.
-Use [NITROGEN_RUNBOOK.md](./NITROGEN_RUNBOOK.md) for the quality path when you need a
-live demo that preserves encrypted randomness.
+This project is designed to run on the buildathon-allowed public testnets by combining:
+
+- browser-encrypted player entropy
+- delayed public block entropy
+- signed private-result publishing for live settle flows
+
+That keeps the games privacy-native without depending on direct runtime randomness support.
 
 ## 1. Prepare Environment
 
@@ -14,7 +17,11 @@ PRIVATE_KEY=0xyour_private_key
 SEPOLIA_RPC_URL=https://ethereum-sepolia.publicnode.com
 DEPLOY_OWNER=0xYourMultisigOrEOA
 INITIAL_BANKROLL_ETH=2
+COFHE_TASK_MANAGER_ADDRESS=0xeA30c4B8b44078Bbf8a6ef5b9f1eC1626C7848D9
 ```
+
+`COFHE_TASK_MANAGER_ADDRESS` is optional if the default address is correct for your target testnet.
+Set it explicitly when deploying to a network where the task manager lives at a different address.
 
 Populate `frontend/.env.local` with the frontend runtime config:
 
@@ -29,7 +36,6 @@ Optional preflight:
 
 ```powershell
 corepack pnpm check:sepolia
-corepack pnpm smoke:sepolia
 ```
 
 Run the full vault + game deployment on Sepolia:
@@ -95,11 +101,9 @@ Open:
 
 ## Notes
 
-- This deployment was broadcast with `INITIAL_BANKROLL_ETH=0`, so the Sepolia vault must be
-  funded later before live wagers can reserve payout liquidity.
-- `corepack pnpm smoke:sepolia` currently reports whether live gameplay can pass the first Mines
-  session-open check on the configured Sepolia runtime. The current result is
-  `RandomFunctionNotSupported()`.
+- If you deploy with `INITIAL_BANKROLL_ETH=0`, fund the vault before attempting live wagers.
+- `corepack pnpm smoke:sepolia` currently validates the Mines deployment path only. Treat it as a
+  focused runtime smoke check, not a complete four-game certification pass.
 - To fund the deployed vault later:
 
 ```powershell
@@ -108,5 +112,6 @@ corepack pnpm deposit:bankroll --network eth-sepolia
 ```
 
 - The frontend warns when the connected wallet is not on the configured chain.
-- Game actions use the async FHE flow: submit, wait for decrypt readiness, then finalize.
+- Game actions use the async FHE flow: submit, wait for signed private-result readiness, then
+  publish/finalize.
 - Local Hardhat deployment still uses `corepack pnpm deploy:casino --network hardhat`.

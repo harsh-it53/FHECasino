@@ -16,6 +16,8 @@ contract FHECrash is FHEGameBase, FHEHybridEntropy {
     error CrashPointAlreadyRevealed(bytes32 sessionId);
     error DecryptResultNotReady(bytes32 sessionId);
     error InvalidCrashPoint(uint32 provided, uint32 minCrashPointBps, uint32 maxCrashPointBps);
+    error InvalidCashoutResultSignature(bytes32 sessionId);
+    error InvalidCrashPointSignature(bytes32 sessionId);
     error InvalidRequestedMultiplier(
         uint32 provided,
         uint32 minMultiplierBps,
@@ -202,7 +204,7 @@ contract FHECrash is FHEGameBase, FHEHybridEntropy {
 
         FHE.allowThis(_lastCashoutAllowedCode[sessionId]);
         _grantViewerAccess(msg.sender, _lastCashoutAllowedCode[sessionId]);
-        FHE.decrypt(_lastCashoutAllowedCode[sessionId]);
+        _scheduleDecryptForContract(_lastCashoutAllowedCode[sessionId]);
 
         emit CrashCashoutRequested(sessionId, session.player, currentMultiplierBps);
     }
@@ -227,8 +229,43 @@ contract FHECrash is FHEGameBase, FHEHybridEntropy {
             revert DecryptResultNotReady(sessionId);
         }
 
-        cashoutSucceeded = cashoutAllowedCode != 0;
+        return _finalizeCashoutWithCode(sessionId, session, metadata, cashoutAllowedCode);
+    }
 
+    function publishCashoutResult(bytes32 sessionId, uint32 cashoutAllowedCode, bytes calldata signature)
+        external
+        whenNotPaused
+        nonReentrant
+        returns (bool cashoutSucceeded, uint256 grossPayout, uint256 netPayout, uint256 houseFee)
+    {
+        GameSession storage session = _requirePlayerActiveSession(sessionId, msg.sender);
+        CrashMetadata storage metadata = crashMetadata[sessionId];
+
+        if (!metadata.pendingCashout) {
+            revert NoPendingCashout(sessionId);
+        }
+        if (
+            !FHE.verifyDecryptResultSafe(
+                _lastCashoutAllowedCode[sessionId], cashoutAllowedCode, signature
+            )
+        ) {
+            revert InvalidCashoutResultSignature(sessionId);
+        }
+
+        FHE.publishDecryptResult(_lastCashoutAllowedCode[sessionId], cashoutAllowedCode, signature);
+        return _finalizeCashoutWithCode(sessionId, session, metadata, cashoutAllowedCode);
+    }
+
+    function _finalizeCashoutWithCode(
+        bytes32 sessionId,
+        GameSession storage session,
+        CrashMetadata storage metadata,
+        uint32 cashoutAllowedCode
+    )
+        internal
+        returns (bool cashoutSucceeded, uint256 grossPayout, uint256 netPayout, uint256 houseFee)
+    {
+        cashoutSucceeded = cashoutAllowedCode != 0;
         metadata.pendingCashout = false;
 
         if (cashoutSucceeded) {
@@ -264,7 +301,8 @@ contract FHECrash is FHEGameBase, FHEHybridEntropy {
         }
 
         metadata.pendingCrashPointReveal = true;
-        FHE.decrypt(_encryptedCrashPointBps[sessionId]);
+        _grantViewerAccess(msg.sender, _encryptedCrashPointBps[sessionId]);
+        _scheduleDecryptForContract(_encryptedCrashPointBps[sessionId]);
 
         emit CrashPointRevealRequested(sessionId, msg.sender);
     }
@@ -288,6 +326,39 @@ contract FHECrash is FHEGameBase, FHEHybridEntropy {
             revert DecryptResultNotReady(sessionId);
         }
 
+        _finalizeCrashPointRevealWithValue(sessionId, metadata, crashPointBps);
+    }
+
+    function publishCrashPointReveal(bytes32 sessionId, uint32 crashPointBps, bytes calldata signature)
+        external
+        whenNotPaused
+        nonReentrant
+        returns (uint32 publishedCrashPointBps)
+    {
+        _requireSettledSession(sessionId);
+
+        CrashMetadata storage metadata = crashMetadata[sessionId];
+        if (!metadata.pendingCrashPointReveal) {
+            revert NoPendingCrashPointReveal(sessionId);
+        }
+        if (
+            !FHE.verifyDecryptResultSafe(
+                _encryptedCrashPointBps[sessionId], crashPointBps, signature
+            )
+        ) {
+            revert InvalidCrashPointSignature(sessionId);
+        }
+
+        FHE.publishDecryptResult(_encryptedCrashPointBps[sessionId], crashPointBps, signature);
+        _finalizeCrashPointRevealWithValue(sessionId, metadata, crashPointBps);
+        return crashPointBps;
+    }
+
+    function _finalizeCrashPointRevealWithValue(
+        bytes32 sessionId,
+        CrashMetadata storage metadata,
+        uint32 crashPointBps
+    ) internal {
         metadata.pendingCrashPointReveal = false;
         metadata.crashPointRevealed = true;
         revealedCrashPointBps[sessionId] = crashPointBps;

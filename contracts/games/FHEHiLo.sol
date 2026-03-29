@@ -29,8 +29,10 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
     error DecryptResultNotReady(bytes32 sessionId);
     error GameAlreadyActivated(bytes32 sessionId);
     error GameNotReady(bytes32 sessionId, uint64 readyBlock);
+    error InvalidCurrentCardSignature(bytes32 sessionId);
     error InvalidCardValue(uint8 cardIndex, uint8 cardValue);
     error InvalidDeckWindowLength(uint256 provided, uint256 expected);
+    error InvalidOutcomeSignature(bytes32 sessionId);
     error NoPendingCashout(bytes32 sessionId);
     error NoPendingGuess(bytes32 sessionId);
     error NoRemainingDraws(bytes32 sessionId);
@@ -47,6 +49,10 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
     }
 
     mapping(bytes32 => HiLoMetadata) public hiLoMetadata;
+    mapping(bytes32 => uint8) public revealedCorrectGuessCount;
+    mapping(bytes32 => uint32) public revealedCurrentCardValue;
+    mapping(bytes32 => uint32) public revealedCurrentMultiplierBps;
+    mapping(bytes32 => uint32) public revealedLastOutcomeCode;
     mapping(bytes32 => mapping(uint8 => euint32)) private _encryptedDeck;
     mapping(bytes32 => euint32) private _playerEntropy;
     mapping(bytes32 => euint32) private _currentCard;
@@ -127,6 +133,7 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
         euint64 encryptedSeed =
             FHE.xor(FHE.asEuint64(_playerEntropy[sessionId]), FHE.asEuint64(uint64(publicEntropy)));
         _initializeDeckWindowFromEncryptedSeed(sessionId, encryptedSeed);
+        _grantViewerAccess(msg.sender, _currentCard[sessionId]);
 
         metadata.ready = true;
 
@@ -149,6 +156,7 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
 
         sessionId = _openSession(msg.sender, msg.value, FHE.asEuint32(0));
         _initializeDeckWindowFromPlaintextCards(sessionId, cards);
+        _grantViewerAccess(msg.sender, _currentCard[sessionId]);
         hiLoMetadata[sessionId].ready = true;
 
         emit HiLoGameStarted(sessionId, msg.sender, msg.value);
@@ -199,13 +207,10 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
         _applyGuessTransition(sessionId, direction, nextCardIndex);
 
         _grantViewerAccess(msg.sender, _currentCard[sessionId]);
-        _grantViewerAccess(msg.sender, _currentMultiplierBps[sessionId]);
-        _grantViewerAccess(msg.sender, _correctGuessCount[sessionId]);
         _grantViewerAccess(msg.sender, _lastOutcomeCode[sessionId]);
 
-        FHE.decrypt(_currentCard[sessionId]);
-        FHE.decrypt(_currentMultiplierBps[sessionId]);
-        FHE.decrypt(_lastOutcomeCode[sessionId]);
+        _scheduleDecryptForContract(_currentCard[sessionId]);
+        _scheduleDecryptForContract(_lastOutcomeCode[sessionId]);
 
         metadata.pendingGuess = true;
         metadata.lastGuessDirection = uint8(direction);
@@ -220,27 +225,88 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
         nonReentrant
         returns (uint32 outcomeCode, uint256 grossPayout, uint256 netPayout, uint256 houseFee)
     {
-        GameSession storage session = _requirePlayerActiveSession(sessionId, msg.sender);
+        _requirePlayerActiveSession(sessionId, msg.sender);
         HiLoMetadata storage metadata = hiLoMetadata[sessionId];
 
         if (!metadata.pendingGuess) {
             revert NoPendingGuess(sessionId);
         }
 
+        bool currentCardReady;
+        uint32 currentCardValue;
+        (currentCardValue, currentCardReady) = FHE.getDecryptResultSafe(_currentCard[sessionId]);
         bool outcomeReady;
         (outcomeCode, outcomeReady) = FHE.getDecryptResultSafe(_lastOutcomeCode[sessionId]);
-        uint32 multiplierBps;
-        bool multiplierReady;
-        (multiplierBps, multiplierReady) = FHE.getDecryptResultSafe(_currentMultiplierBps[sessionId]);
-        if (!outcomeReady || !multiplierReady) {
+        if (!currentCardReady || !outcomeReady) {
             revert DecryptResultNotReady(sessionId);
         }
 
+        return _finalizeGuessWithValues(sessionId, outcomeCode, currentCardValue);
+    }
+
+    function publishGuessResult(
+        bytes32 sessionId,
+        uint32 currentCardValue,
+        uint32 outcomeCode,
+        bytes calldata currentCardSignature,
+        bytes calldata outcomeSignature
+    )
+        external
+        whenNotPaused
+        nonReentrant
+        returns (uint32 publishedOutcomeCode, uint256 grossPayout, uint256 netPayout, uint256 houseFee)
+    {
+        _requirePlayerActiveSession(sessionId, msg.sender);
+        HiLoMetadata storage metadata = hiLoMetadata[sessionId];
+
+        if (!metadata.pendingGuess) {
+            revert NoPendingGuess(sessionId);
+        }
+        if (
+            !FHE.verifyDecryptResultSafe(
+                _currentCard[sessionId], currentCardValue, currentCardSignature
+            )
+        ) {
+            revert InvalidCurrentCardSignature(sessionId);
+        }
+        if (
+            !FHE.verifyDecryptResultSafe(
+                _lastOutcomeCode[sessionId], outcomeCode, outcomeSignature
+            )
+        ) {
+            revert InvalidOutcomeSignature(sessionId);
+        }
+
+        FHE.publishDecryptResult(_currentCard[sessionId], currentCardValue, currentCardSignature);
+        FHE.publishDecryptResult(_lastOutcomeCode[sessionId], outcomeCode, outcomeSignature);
+        return _finalizeGuessWithValues(sessionId, outcomeCode, currentCardValue);
+    }
+
+    function _finalizeGuessWithValues(
+        bytes32 sessionId,
+        uint32 outcomeCode,
+        uint32 currentCardValue
+    ) internal returns (uint32 publishedOutcomeCode, uint256 grossPayout, uint256 netPayout, uint256 houseFee) {
+        GameSession storage session = sessions[sessionId];
+        HiLoMetadata storage metadata = hiLoMetadata[sessionId];
         metadata.pendingGuess = false;
+        revealedCurrentCardValue[sessionId] = currentCardValue;
+        revealedLastOutcomeCode[sessionId] = outcomeCode;
+
+        if (outcomeCode == OUTCOME_CORRECT) {
+            uint8 nextCorrectGuessCount = revealedCorrectGuessCount[sessionId] + 1;
+            uint32 nextMultiplierBps = _multiplierTableBps(nextCorrectGuessCount);
+
+            revealedCorrectGuessCount[sessionId] = nextCorrectGuessCount;
+            revealedCurrentMultiplierBps[sessionId] = nextMultiplierBps;
+        } else if (outcomeCode == OUTCOME_LOSS) {
+            revealedCurrentMultiplierBps[sessionId] = 0;
+        }
 
         if (outcomeCode == OUTCOME_LOSS) {
             _finalizeSession(sessionId, SessionStatus.LOST, 0);
         } else if (metadata.currentCardIndex == MAX_ROUNDS) {
+            uint32 multiplierBps = revealedCurrentMultiplierBps[sessionId];
             grossPayout = (uint256(session.wager) * multiplierBps) / BPS_DENOMINATOR;
             (netPayout, houseFee) = _finalizeSession(sessionId, SessionStatus.WON, grossPayout);
         }
@@ -253,6 +319,8 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
             netPayout,
             houseFee
         );
+
+        publishedOutcomeCode = outcomeCode;
     }
 
     function requestCashout(bytes32 sessionId) external whenNotPaused nonReentrant {
@@ -271,10 +339,6 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
 
         metadata.pendingCashout = true;
 
-        _grantViewerAccess(msg.sender, _currentMultiplierBps[sessionId]);
-        _grantViewerAccess(msg.sender, _correctGuessCount[sessionId]);
-        FHE.decrypt(_currentMultiplierBps[sessionId]);
-
         emit CashoutRequested(sessionId, session.player);
     }
 
@@ -291,15 +355,9 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
             revert NoPendingCashout(sessionId);
         }
 
-        uint32 multiplierBps;
-        bool decrypted;
-        (multiplierBps, decrypted) = FHE.getDecryptResultSafe(_currentMultiplierBps[sessionId]);
-        if (!decrypted) {
-            revert DecryptResultNotReady(sessionId);
-        }
-
         metadata.pendingCashout = false;
 
+        uint32 multiplierBps = revealedCurrentMultiplierBps[sessionId];
         grossPayout = (uint256(session.wager) * multiplierBps) / BPS_DENOMINATOR;
         (netPayout, houseFee) = _finalizeSession(sessionId, SessionStatus.CASHED_OUT, grossPayout);
 
@@ -321,6 +379,9 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
 
     function readCurrentCard(bytes32 sessionId) external view returns (uint32 cardValue, bool ready) {
         _validateSessionPlayer(sessionId, msg.sender);
+        if (!hiLoMetadata[sessionId].pendingGuess && revealedCurrentCardValue[sessionId] != 0) {
+            return (revealedCurrentCardValue[sessionId], true);
+        }
         (cardValue, ready) = FHE.getDecryptResultSafe(_currentCard[sessionId]);
     }
 
@@ -335,7 +396,8 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
         returns (uint32 multiplierBps, bool ready)
     {
         _validateSessionPlayer(sessionId, msg.sender);
-        (multiplierBps, ready) = FHE.getDecryptResultSafe(_currentMultiplierBps[sessionId]);
+        multiplierBps = revealedCurrentMultiplierBps[sessionId];
+        ready = !hiLoMetadata[sessionId].pendingGuess;
     }
 
     function getCorrectGuessCount(bytes32 sessionId) external view returns (euint32) {
@@ -350,6 +412,9 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
 
     function readLastOutcome(bytes32 sessionId) external view returns (uint32 outcomeCode, bool ready) {
         _validateSessionPlayer(sessionId, msg.sender);
+        if (!hiLoMetadata[sessionId].pendingGuess && hiLoMetadata[sessionId].currentCardIndex > 0) {
+            return (revealedLastOutcomeCode[sessionId], true);
+        }
         (outcomeCode, ready) = FHE.getDecryptResultSafe(_lastOutcomeCode[sessionId]);
     }
 
@@ -380,6 +445,10 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
         _currentMultiplierBps[sessionId] = FHE.asEuint32(BASE_MULTIPLIER_BPS);
         _correctGuessCount[sessionId] = ENCRYPTED_ZERO_U32;
         _lastOutcomeCode[sessionId] = ENCRYPTED_ZERO_U32;
+        revealedCurrentCardValue[sessionId] = 0;
+        revealedCorrectGuessCount[sessionId] = 0;
+        revealedCurrentMultiplierBps[sessionId] = BASE_MULTIPLIER_BPS;
+        revealedLastOutcomeCode[sessionId] = OUTCOME_PUSH;
 
         FHE.allowThis(_playerEntropy[sessionId]);
         FHE.allowThis(_currentMultiplierBps[sessionId]);
@@ -410,7 +479,9 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
 
         _currentCard[sessionId] = _encryptedDeck[sessionId][0];
         FHE.allowThis(_currentCard[sessionId]);
-        FHE.decrypt(_currentCard[sessionId]);
+        if (_isLocalDevChain()) {
+            _scheduleDecryptForContract(_currentCard[sessionId]);
+        }
     }
 
     function _initializeDeckWindowFromPlaintextCards(bytes32 sessionId, uint8[] calldata cards) internal {
@@ -424,7 +495,9 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
 
         _currentCard[sessionId] = _encryptedDeck[sessionId][0];
         FHE.allowThis(_currentCard[sessionId]);
-        FHE.decrypt(_currentCard[sessionId]);
+        if (_isLocalDevChain()) {
+            _scheduleDecryptForContract(_currentCard[sessionId]);
+        }
     }
 
     function _applyGuessTransition(bytes32 sessionId, GuessDirection direction, uint8 nextCardIndex)
@@ -447,7 +520,6 @@ contract FHEHiLo is FHEGameBase, FHEHybridEntropy {
         FHE.allowThis(_currentMultiplierBps[sessionId]);
         FHE.allowThis(_correctGuessCount[sessionId]);
         FHE.allowThis(_lastOutcomeCode[sessionId]);
-        FHE.decrypt(_currentCard[sessionId]);
     }
 
     function _resolveGuessFlags(GuessDirection direction, euint32 currentCard, euint32 nextCard)

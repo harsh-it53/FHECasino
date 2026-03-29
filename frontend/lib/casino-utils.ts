@@ -122,6 +122,31 @@ export function readErrorMessage(error: unknown) {
     const normalizedMessage = `${shortMessage ?? ''} ${message ?? ''} ${details ?? ''} ${causeShortMessage ?? ''} ${causeMessage ?? ''}`.toLowerCase()
 
     if (
+      normalizedMessage.includes('invalidrevealsignature') ||
+      normalizedMessage.includes('invalidcashoutresultsignature') ||
+      normalizedMessage.includes('invalidcrashpointsignature') ||
+      normalizedMessage.includes('invalidcurrentcardsignature') ||
+      normalizedMessage.includes('invalidoutcomesignature') ||
+      normalizedMessage.includes('invalidsettlesignature') ||
+      normalizedMessage.includes('0x0b2f7e93') ||
+      normalizedMessage.includes('0xe86c03d0') ||
+      normalizedMessage.includes('0x7fb5c871') ||
+      normalizedMessage.includes('0xf48aba03') ||
+      normalizedMessage.includes('0x589fb5c0') ||
+      normalizedMessage.includes('0xa60d45a5') ||
+      normalizedMessage.includes('0xa73c1279') ||
+      revertData.startsWith('0x0b2f7e93') ||
+      revertData.startsWith('0xe86c03d0') ||
+      revertData.startsWith('0x7fb5c871') ||
+      revertData.startsWith('0xf48aba03') ||
+      revertData.startsWith('0x589fb5c0') ||
+      revertData.startsWith('0xa60d45a5') ||
+      revertData.startsWith('0xa73c1279')
+    ) {
+      return 'The signed private result no longer matches this round state. Refresh the page and retry that action.'
+    }
+
+    if (
       normalizedMessage.includes('decryptresultnotready') ||
       normalizedMessage.includes('0x47bd9f13') ||
       revertData.startsWith('0x47bd9f13')
@@ -158,6 +183,57 @@ export function readErrorMessage(error: unknown) {
       normalizedMessage.includes('requested resource not available')
     ) {
       return 'Your wallet RPC is rate-limited right now. Switch MetaMask Sepolia RPC to a stable public endpoint, then refresh and try again.'
+    }
+
+    if (
+      normalizedMessage.includes('failed to fetch') ||
+      normalizedMessage.includes('fetch failed')
+    ) {
+      return 'The app lost contact with the Sepolia RPC while preparing this transaction. Refresh and retry on the updated client.'
+    }
+
+    if (
+      normalizedMessage.includes('precondition required') ||
+      (normalizedMessage.includes('/v2/decrypt') && normalizedMessage.includes('http 428')) ||
+      (normalizedMessage.includes('decrypt request failed') && normalizedMessage.includes('http 428')) ||
+      normalizedMessage.includes('decrypt request failed: http 428') ||
+      (normalizedMessage.includes('sealoutput') && normalizedMessage.includes('http 428')) ||
+      normalizedMessage.includes('decrypt request not found')
+    ) {
+      return 'The private result is still being prepared by the FHE network. Wait a moment and continue when it is ready.'
+    }
+
+    if (
+      (normalizedMessage.includes('/v2/sealoutput') && normalizedMessage.includes('http 403')) ||
+      (normalizedMessage.includes('sealoutput request failed') && normalizedMessage.includes('http 403')) ||
+      (normalizedMessage.includes('/v2/decrypt') && normalizedMessage.includes('http 403')) ||
+      (normalizedMessage.includes('decrypt request failed') && normalizedMessage.includes('http 403'))
+    ) {
+      return 'The FHE network is still syncing your private access for this result. Wait a little longer and retry once the signed output is ready.'
+    }
+
+    if (
+      (normalizedMessage.includes('/v2/sealoutput') && normalizedMessage.includes('http 404')) ||
+      (normalizedMessage.includes('sealoutput request failed') && normalizedMessage.includes('http 404')) ||
+      (normalizedMessage.includes('/v2/decrypt') && normalizedMessage.includes('http 404')) ||
+      (normalizedMessage.includes('decrypt request failed') && normalizedMessage.includes('http 404'))
+    ) {
+      return 'The private result handle is still syncing through the FHE network. Wait a moment and retry when the signed output is ready.'
+    }
+
+    if (
+      normalizedMessage.includes('connection refused') &&
+      normalizedMessage.includes('127.0.0.1:8545')
+    ) {
+      return 'A stale local-chain client was still active in the browser. Hard refresh once and retry on the updated client.'
+    }
+
+    if (
+      normalizedMessage.includes('rehydrate keys store') ||
+      normalizedMessage.includes('iframe storage hub') ||
+      normalizedMessage.includes('indexdbkeyval.get')
+    ) {
+      return 'The browser encryption runtime had a stale local cache. Refresh once and retry on the updated client.'
     }
 
     if (normalizedMessage.includes('transaction gas limit too high')) {

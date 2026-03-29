@@ -62,17 +62,17 @@ export function GameScaffold({
             <div>
               <Link
                 href="/casino"
-                className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 font-heading text-xs uppercase tracking-[0.24em] text-slate-200 transition hover:border-cyan/40 hover:text-white"
+                className="inline-flex rounded-full border border-borderLine/80 bg-panel/70 px-4 py-2 font-heading text-xs uppercase tracking-[0.24em] text-muted transition hover:border-purple/40 hover:bg-accent/70 hover:text-text"
               >
                 Back To Lobby
               </Link>
-              <p className="mt-6 font-heading text-xs uppercase tracking-[0.34em] text-cyan/75">
+              <p className="mt-6 font-heading text-xs uppercase tracking-[0.34em] text-purple/80">
                 Live Game Module
               </p>
-              <h1 className="mt-3 font-display text-4xl uppercase tracking-[0.16em] text-white">
+              <h1 className="mt-3 font-display text-4xl uppercase tracking-[0.16em] text-text">
                 {game.title}
               </h1>
-              <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300">{game.summary}</p>
+              <p className="mt-4 max-w-3xl text-sm leading-7 text-muted">{game.summary}</p>
             </div>
 
             <div className="flex flex-col items-start gap-3 xl:items-end">
@@ -88,7 +88,7 @@ export function GameScaffold({
             <MetricCard label="Session" value={sessionId ? truncateHex(sessionId) : 'None'} />
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-3 text-xs uppercase tracking-[0.22em] text-slate-400">
+          <div className="mt-6 flex flex-wrap gap-3 text-xs uppercase tracking-[0.22em] text-muted/80">
             <span>Pattern: {game.pattern}</span>
             <span>Network: {chainId}</span>
             <span>Contract: {gameAddress ? truncateHex(gameAddress) : 'Set NEXT_PUBLIC env'}</span>
@@ -98,7 +98,7 @@ export function GameScaffold({
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-6 rounded-[28px] border border-white/10 bg-black/20 p-5"
+            className="theme-subtle-surface mt-6 rounded-[28px] p-5"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <StatusChip label={readinessLabel} tone={readinessTone} />
@@ -108,7 +108,7 @@ export function GameScaffold({
                 <FlowPill label="3. Finalize" active={Boolean(sessionId)} />
               </div>
             </div>
-            <p className="mt-4 text-sm leading-7 text-slate-300">{readinessMessage}</p>
+            <p className="mt-4 text-sm leading-7 text-muted">{readinessMessage}</p>
           </motion.div>
         </div>
 
@@ -130,7 +130,7 @@ export function ControlPanel({
 }) {
   return (
     <section className="glass-panel rounded-[32px] p-6">
-      <p className="font-heading text-xs uppercase tracking-[0.32em] text-cyan/75">{title}</p>
+      <p className="font-heading text-xs uppercase tracking-[0.32em] text-purple/80">{title}</p>
       <div className="mt-5 space-y-4">{body}</div>
     </section>
   )
@@ -150,14 +150,14 @@ export function StatusPanel({
 
   return (
     <section className="glass-panel rounded-[32px] p-6">
-      <p className="font-heading text-xs uppercase tracking-[0.32em] text-cyan/75">On-Chain Status</p>
+      <p className="font-heading text-xs uppercase tracking-[0.32em] text-purple/80">On-Chain Status</p>
       <div className="mt-5 space-y-3">
         <InfoRow label="Session Status" value={status} />
         <InfoRow label="Wager" value={session ? `${formatEthCompact(session[1])} ETH` : 'None'} />
         <InfoRow label="Net Payout" value={netPayout ? `${formatEthCompact(netPayout)} ETH` : '0 ETH'} />
       </div>
-      <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
-        <p className="font-heading text-[10px] uppercase tracking-[0.28em] text-slate-500">
+      <div className="theme-subtle-surface mt-5 rounded-2xl p-4">
+        <p className="font-heading text-[10px] uppercase tracking-[0.28em] text-muted/75">
           Async FHE Flow
         </p>
         <div className="mt-4 grid gap-2">
@@ -167,7 +167,7 @@ export function StatusPanel({
           />
           <FlowStep
             label="Wait for decryption readiness"
-            description="The contract schedules a player-scoped decrypt in the background."
+            description="The private result is prepared by the FHE network, then the app unlocks the next action once the secure result is ready."
           />
           <FlowStep
             label="Finalize the result"
@@ -176,7 +176,7 @@ export function StatusPanel({
         </div>
       </div>
       <p className={`mt-5 rounded-2xl border px-4 py-3 text-sm leading-6 ${
-        message ? 'border-cyan/25 bg-cyan/10 text-slate-100' : 'border-white/10 bg-white/5 text-slate-400'
+        message ? 'border-purple/25 bg-purple/10 text-text' : 'theme-subtle-surface text-muted'
       }`}>
         {message ?? 'Transactions will appear here as you move through the async FHE settle flow.'}
       </p>
@@ -186,9 +186,9 @@ export function StatusPanel({
 
 export function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-black/20 p-4">
-      <p className="font-heading text-[10px] uppercase tracking-[0.28em] text-slate-500">{label}</p>
-      <p className="mt-3 font-numbers text-lg text-white">{value}</p>
+    <div className="theme-subtle-surface rounded-[24px] p-4">
+      <p className="font-heading text-[10px] uppercase tracking-[0.28em] text-muted/75">{label}</p>
+      <p className="mt-3 font-numbers text-lg text-text">{value}</p>
     </div>
   )
 }
@@ -211,8 +211,8 @@ export function ActionButton({
       disabled={disabled}
       className={`w-full rounded-full border px-4 py-3 font-heading text-xs uppercase tracking-[0.24em] transition ${
         tone === 'primary'
-          ? 'border-purple/40 bg-purple text-white hover:bg-purple/90'
-          : 'border-white/10 bg-white/5 text-slate-200 hover:border-cyan/40 hover:text-white'
+          ? 'border-purple/45 bg-purple text-primaryFg hover:bg-purple/90'
+          : 'theme-interactive text-text'
       } disabled:cursor-not-allowed disabled:opacity-60`}
     >
       {label}
@@ -233,9 +233,9 @@ export function LabeledInput({
 }) {
   return (
     <label className="block">
-      <span className="font-heading text-[10px] uppercase tracking-[0.26em] text-slate-500">{label}</span>
+      <span className="font-heading text-[10px] uppercase tracking-[0.26em] text-muted/75">{label}</span>
       <input
-        className="mt-2 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 font-numbers text-white outline-none transition focus:border-cyan/50"
+        className="theme-input mt-2 w-full rounded-2xl px-4 py-3 font-numbers outline-none transition focus:border-purple/50 focus:bg-card"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
@@ -258,7 +258,7 @@ export function PresetRow({
           key={value}
           type="button"
           onClick={() => onPick(value)}
-          className="rounded-full border border-white/10 bg-white/5 px-3 py-2 font-numbers text-xs text-slate-200 transition hover:border-cyan/40 hover:text-white"
+          className="theme-interactive rounded-full px-3 py-2 font-numbers text-xs transition hover:text-text"
         >
           {value}
         </button>
@@ -269,9 +269,9 @@ export function PresetRow({
 
 export function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-      <span className="font-heading text-[10px] uppercase tracking-[0.26em] text-slate-500">{label}</span>
-      <span className="font-numbers text-sm text-white">{value}</span>
+    <div className="theme-subtle-surface flex items-center justify-between gap-4 rounded-2xl px-4 py-3">
+      <span className="font-heading text-[10px] uppercase tracking-[0.26em] text-muted/75">{label}</span>
+      <span className="font-numbers text-sm text-text">{value}</span>
     </div>
   )
 }
@@ -284,8 +284,8 @@ export function StatusChip({
   tone: 'cyan' | 'gold' | 'danger' | 'success'
 }) {
   const styles = {
-    cyan: 'border-cyan/30 bg-cyan/10 text-cyan',
-    gold: 'border-gold/30 bg-gold/10 text-gold',
+    cyan: 'border-purple/30 bg-purple/10 text-purple',
+    gold: 'border-cyan/35 bg-cyan/14 text-cyan',
     danger: 'border-danger/30 bg-danger/10 text-danger',
     success: 'border-success/30 bg-success/10 text-success',
   } as const
@@ -303,10 +303,10 @@ export function CardFace({ title, value }: { title: string; value: string }) {
       initial={{ opacity: 0.85, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.22 }}
-      className="rounded-[28px] border border-white/10 bg-black/20 p-6 text-center"
+      className="theme-subtle-surface rounded-[28px] p-6 text-center"
     >
-      <p className="font-heading text-xs uppercase tracking-[0.26em] text-slate-500">{title}</p>
-      <p className="mt-6 font-display text-5xl uppercase tracking-[0.12em] text-white">{value}</p>
+      <p className="font-heading text-xs uppercase tracking-[0.26em] text-muted/75">{title}</p>
+      <p className="mt-6 font-display text-5xl uppercase tracking-[0.12em] text-text">{value}</p>
     </motion.div>
   )
 }
@@ -316,8 +316,8 @@ function FlowPill({ label, active }: { label: string; active: boolean }) {
     <span
       className={`rounded-full border px-3 py-2 font-heading text-[10px] uppercase tracking-[0.24em] ${
         active
-          ? 'border-cyan/30 bg-cyan/10 text-cyan'
-          : 'border-white/10 bg-white/5 text-slate-500'
+          ? 'border-purple/30 bg-purple/10 text-purple'
+          : 'theme-subtle-surface text-muted/75'
       }`}
     >
       {label}
@@ -333,9 +333,9 @@ function FlowStep({
   description: string
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-      <p className="font-heading text-[10px] uppercase tracking-[0.24em] text-cyan">{label}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-300">{description}</p>
+    <div className="theme-subtle-surface rounded-2xl px-4 py-3">
+      <p className="font-heading text-[10px] uppercase tracking-[0.24em] text-purple">{label}</p>
+      <p className="mt-2 text-sm leading-6 text-muted">{description}</p>
     </div>
   )
 }
@@ -379,7 +379,7 @@ export function useGameBaseState(gameAddress?: Address) {
     args: [playerAddress ?? ZERO_ADDRESS],
     query: {
       enabled: sessionEnabled,
-      refetchInterval: 5000,
+      refetchInterval: 1500,
     },
   })
 
@@ -394,7 +394,7 @@ export function useGameBaseState(gameAddress?: Address) {
     args: [sessionId ?? ZERO_SESSION_ID],
     query: {
       enabled: Boolean(gameAddress && sessionId),
-      refetchInterval: 5000,
+      refetchInterval: 1500,
     },
   })
 

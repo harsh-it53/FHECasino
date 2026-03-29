@@ -2,7 +2,7 @@
 
 import { EncryptStep } from '@cofhe/sdk'
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   useAccount,
   useBlockNumber,
@@ -214,6 +214,72 @@ export function CrashGame() {
             ? `${txLabel} submitted.`
             : null
 
+  const needsFastPolling = Boolean(
+    sessionId &&
+      (isBusy ||
+        !roundReady ||
+        pendingCashout ||
+        pendingCrashPointReveal ||
+        currentStatus === 'Active' ||
+        (entropyReadyBlock > 0 && !entropyWindowReady))
+  )
+
+  useEffect(() => {
+    if (!sessionId || !needsFastPolling) {
+      return
+    }
+
+    const refreshSessionState = () => {
+      void Promise.allSettled([
+        metadataQuery.refetch(),
+        entropyStateQuery.refetch(),
+        liveMultiplierQuery.refetch(),
+        revealedCrashPointQuery.refetch(),
+        cashoutReadyQuery.refetch(),
+        crashPointReadyQuery.refetch(),
+      ])
+    }
+
+    refreshSessionState()
+    const intervalId = window.setInterval(refreshSessionState, 1250)
+
+    return () => window.clearInterval(intervalId)
+  }, [
+    sessionId,
+    needsFastPolling,
+    metadataQuery,
+    entropyStateQuery,
+    liveMultiplierQuery,
+    revealedCrashPointQuery,
+    cashoutReadyQuery,
+    crashPointReadyQuery,
+  ])
+
+  useEffect(() => {
+    if (!sessionId || (!txHash && !isConfirmed)) {
+      return
+    }
+
+    void Promise.allSettled([
+      metadataQuery.refetch(),
+      entropyStateQuery.refetch(),
+      liveMultiplierQuery.refetch(),
+      revealedCrashPointQuery.refetch(),
+      cashoutReadyQuery.refetch(),
+      crashPointReadyQuery.refetch(),
+    ])
+  }, [
+    sessionId,
+    txHash,
+    isConfirmed,
+    metadataQuery,
+    entropyStateQuery,
+    liveMultiplierQuery,
+    revealedCrashPointQuery,
+    cashoutReadyQuery,
+    crashPointReadyQuery,
+  ])
+
   async function writeWithEstimatedGas(request: {
     address: `0x${string}`
     abi: typeof crashAbi
@@ -393,18 +459,18 @@ export function CrashGame() {
         <div className="glass-panel rounded-[32px] p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="font-heading text-xs uppercase tracking-[0.32em] text-cyan/75">
+              <p className="font-heading text-xs uppercase tracking-[0.32em] text-purple/75">
                 Sealed Multiplier
               </p>
-              <h2 className="mt-3 font-heading text-3xl uppercase tracking-[0.16em] text-white">
+              <h2 className="mt-3 font-heading text-3xl uppercase tracking-[0.16em] text-text">
                 Time The Cashout
               </h2>
             </div>
             <StatusChip label={statusLabel} tone={statusTone} />
           </div>
 
-          <div className="mt-4 rounded-[28px] border border-white/10 bg-black/20 p-8 text-center">
-            <p className="font-heading text-xs uppercase tracking-[0.3em] text-slate-500">
+          <div className="mt-4 rounded-[28px] border border-borderLine/80 bg-panel/72 p-8 text-center">
+            <p className="font-heading text-xs uppercase tracking-[0.3em] text-muted/75">
               Live Multiplier
             </p>
             <motion.p
@@ -415,28 +481,28 @@ export function CrashGame() {
                 scale: pendingCashout ? [1, 1.02, 1] : 1,
               }}
               transition={{ duration: 0.35 }}
-              className="mt-6 font-display text-6xl uppercase tracking-[0.1em] text-white"
+              className="mt-6 font-display text-6xl uppercase tracking-[0.1em] text-text"
             >
               {formatMultiplier(liveMultiplierBps)}
             </motion.p>
-            <p className="mt-4 text-sm leading-7 text-slate-300">
+            <p className="mt-4 text-sm leading-7 text-muted">
               Each round encrypts a private browser-side seed first. After the entropy block lands,
               activate the round so your hidden seed can combine with public chain entropy and
               produce the sealed crash point.
             </p>
 
-            <div className="mt-6 rounded-[24px] border border-white/10 bg-white/5 p-4">
+            <div className="mt-6 rounded-[24px] border border-borderLine/80 bg-canvas/45 p-4">
               <div className="flex items-center justify-between gap-4">
-                <p className="font-heading text-[10px] uppercase tracking-[0.28em] text-slate-500">
+                <p className="font-heading text-[10px] uppercase tracking-[0.28em] text-muted/75">
                   Round Trajectory
                 </p>
                 <span className={`font-heading text-[11px] uppercase tracking-[0.24em] ${
-                  roundReady && !pendingCashout ? 'text-cyan' : 'text-gold'
+                  roundReady && !pendingCashout ? 'text-purple' : 'text-cyan'
                 }`}>
                   {roundTrajectoryLabel}
                 </span>
               </div>
-              <div className="relative mt-4 h-4 rounded-full border border-white/10 bg-black/30">
+              <div className="relative mt-4 h-4 rounded-full border border-borderLine/80 bg-canvas/45">
                 <motion.div
                   className="h-full rounded-full bg-gradient-to-r from-cyan via-purple to-gold"
                   initial={{ width: 0 }}
@@ -503,7 +569,7 @@ export function CrashGame() {
                   }
                   tone="primary"
                 />
-                <p className="text-xs leading-6 text-slate-400">
+                <p className="text-xs leading-6 text-muted/80">
                   Start encrypts a private 32-bit seed in your browser and sends the verified
                   ciphertext on-chain with your wager.
                 </p>
@@ -600,7 +666,7 @@ export function CrashGame() {
           <StatusPanel
             message={txMessage}
             session={session}
-            finalizeHint="Activate the round after the entropy block lands. Cashout checks and crash-point reveals process privately first, then finalize unlocks once the secure result is ready."
+            finalizeHint="Activate the round after the entropy block lands. Cashout checks and crash-point reveals settle once the contract-side decrypt result is ready on-chain."
           />
         </div>
       }

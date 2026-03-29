@@ -1,18 +1,50 @@
-import { getDefaultConfig } from '@rainbow-me/rainbowkit'
-import { http } from 'wagmi'
+import { createConfig, fallback, http } from 'wagmi'
+import { injected } from 'wagmi/connectors'
 import type { Chain } from 'wagmi/chains'
 import { arbitrumSepolia, baseSepolia, sepolia } from 'wagmi/chains'
 
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'fhe-casino-dev'
+const configuredExpectedChainId = readConfiguredExpectedChainId()
 const localRpcUrl = process.env.NEXT_PUBLIC_LOCAL_RPC_URL || 'http://127.0.0.1:8545'
-const sepoliaRpcUrl =
-  process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || 'https://ethereum-sepolia.publicnode.com'
-const arbitrumSepoliaRpcUrl =
-  process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc'
-const baseSepoliaRpcUrl =
-  process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org'
+const sepoliaRpcUrls = [
+  process.env.NEXT_PUBLIC_SEPOLIA_RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com',
+  process.env.NEXT_PUBLIC_SEPOLIA_RPC_FALLBACK_URL || 'https://rpc.sepolia.ethpandaops.io',
+  'https://ethereum-sepolia.publicnode.com',
+].filter(Boolean)
+const arbitrumSepoliaRpcUrls = [
+  process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc',
+].filter(Boolean)
+const baseSepoliaRpcUrls = [
+  process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org',
+].filter(Boolean)
 const fhenixNitrogenRpcUrl =
   process.env.NEXT_PUBLIC_FHENIX_NITROGEN_RPC_URL || 'https://api.nitrogen.fhenix.zone'
+
+function createHttpTransport(url: string) {
+  return http(url, {
+    retryCount: 2,
+    retryDelay: 500,
+    timeout: 15_000,
+  })
+}
+
+function createFallbackTransport(urls: string[]) {
+  const uniqueUrls = Array.from(new Set(urls.filter(Boolean)))
+  if (uniqueUrls.length === 1) {
+    return createHttpTransport(uniqueUrls[0]!)
+  }
+
+  return fallback(uniqueUrls.map((url) => createHttpTransport(url)))
+}
+
+function readConfiguredExpectedChainId() {
+  const rawValue = process.env.NEXT_PUBLIC_EXPECTED_CHAIN_ID
+  if (!rawValue) {
+    return undefined
+  }
+
+  const parsed = Number.parseInt(rawValue, 10)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
 
 export const hardhatLocal: Chain = {
   id: 31337,
@@ -68,10 +100,10 @@ export const appSepolia: Chain = {
   ...sepolia,
   rpcUrls: {
     default: {
-      http: [sepoliaRpcUrl],
+      http: sepoliaRpcUrls,
     },
     public: {
-      http: [sepoliaRpcUrl],
+      http: sepoliaRpcUrls,
     },
   },
 }
@@ -80,10 +112,10 @@ export const appArbitrumSepolia: Chain = {
   ...arbitrumSepolia,
   rpcUrls: {
     default: {
-      http: [arbitrumSepoliaRpcUrl],
+      http: arbitrumSepoliaRpcUrls,
     },
     public: {
-      http: [arbitrumSepoliaRpcUrl],
+      http: arbitrumSepoliaRpcUrls,
     },
   },
 }
@@ -92,15 +124,15 @@ export const appBaseSepolia: Chain = {
   ...baseSepolia,
   rpcUrls: {
     default: {
-      http: [baseSepoliaRpcUrl],
+      http: baseSepoliaRpcUrls,
     },
     public: {
-      http: [baseSepoliaRpcUrl],
+      http: baseSepoliaRpcUrls,
     },
   },
 }
 
-export const supportedChains = [
+const allSupportedChains = [
   hardhatLocal,
   fhenixNitrogen,
   appSepolia,
@@ -108,32 +140,29 @@ export const supportedChains = [
   appBaseSepolia,
 ] as const
 
+const preferredChain =
+  configuredExpectedChainId !== undefined
+    ? allSupportedChains.find((chain) => chain.id === configuredExpectedChainId)
+    : undefined
+
+export const supportedChains = (preferredChain
+  ? [preferredChain]
+  : [...allSupportedChains]) as readonly [Chain, ...Chain[]]
+
 export function createWagmiConfig() {
-  return getDefaultConfig({
-    appName: 'FHE Casino',
-    projectId,
+  return createConfig({
     chains: supportedChains,
+    connectors: [
+      injected({
+        shimDisconnect: true,
+      }),
+    ],
     transports: {
-      [hardhatLocal.id]: http(localRpcUrl, {
-        retryCount: 2,
-        retryDelay: 500,
-      }),
-      [fhenixNitrogen.id]: http(fhenixNitrogenRpcUrl, {
-        retryCount: 2,
-        retryDelay: 500,
-      }),
-      [appSepolia.id]: http(sepoliaRpcUrl, {
-        retryCount: 2,
-        retryDelay: 500,
-      }),
-      [appArbitrumSepolia.id]: http(arbitrumSepoliaRpcUrl, {
-        retryCount: 2,
-        retryDelay: 500,
-      }),
-      [appBaseSepolia.id]: http(baseSepoliaRpcUrl, {
-        retryCount: 2,
-        retryDelay: 500,
-      }),
+      [hardhatLocal.id]: createHttpTransport(localRpcUrl),
+      [fhenixNitrogen.id]: createHttpTransport(fhenixNitrogenRpcUrl),
+      [appSepolia.id]: createFallbackTransport(sepoliaRpcUrls),
+      [appArbitrumSepolia.id]: createFallbackTransport(arbitrumSepoliaRpcUrls),
+      [appBaseSepolia.id]: createFallbackTransport(baseSepoliaRpcUrls),
     },
     ssr: false,
   })

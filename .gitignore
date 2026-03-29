@@ -33,3 +33,6 @@ tmp/
 .vscode/
 .DS_Store
 Thumbs.db
+
+out.txt
+test-output.txt

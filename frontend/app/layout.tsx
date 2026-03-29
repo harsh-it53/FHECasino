@@ -36,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body
         className={`${orbitron.variable} ${rajdhani.variable} ${dmMono.variable} ${jetBrainsMono.variable} bg-canvas font-body text-text antialiased`}
       >
@@ -45,4 +45,3 @@ export default function RootLayout({
     </html>
   )
 }
-

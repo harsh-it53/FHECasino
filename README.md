@@ -24,15 +24,22 @@ corepack pnpm deploy:casino --network hardhat
 Copy the printed `NEXT_PUBLIC_*` addresses into `frontend/.env.local` to wire the lobby and
 game routes against the local deployment.
 
-## Sepolia Deploy
+## Allowed Testnets
 
-For the Sepolia deployment checklist, frontend env wiring, and validation commands, use
+The buildathon deployment targets for this project are:
+
+- Ethereum Sepolia
+- Arbitrum Sepolia
+- Base Sepolia
+
+The live architecture uses browser-encrypted player entropy plus delayed public block entropy,
+which keeps the games compatible with those allowed public testnets without relying on direct
+runtime randomness.
+
+## Testnet Deploy
+
+For the deployment checklist, frontend env wiring, and validation commands, use
 [docs/SEPOLIA_RUNBOOK.md](./docs/SEPOLIA_RUNBOOK.md).
-
-## Nitrogen Deploy
-
-For a live Fhenix deployment path that matches the documented randomness support, use
-[docs/NITROGEN_RUNBOOK.md](./docs/NITROGEN_RUNBOOK.md).
 
 ## Structure
 

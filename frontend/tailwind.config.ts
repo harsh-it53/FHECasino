@@ -9,15 +9,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        canvas: 'var(--bg-primary)',
-        panel: 'var(--bg-secondary)',
-        purple: 'var(--accent-purple)',
-        cyan: 'var(--accent-cyan)',
-        gold: 'var(--accent-gold)',
-        success: 'var(--success-green)',
-        danger: 'var(--danger-red)',
-        text: 'var(--text-primary)',
-        muted: 'var(--text-secondary)',
+        canvas: 'var(--background)',
+        panel: 'var(--card)',
+        accent: 'var(--accent)',
+        purple: 'var(--primary)',
+        cyan: 'var(--secondary)',
+        gold: 'var(--ring)',
+        success: 'var(--chart-1)',
+        danger: 'var(--destructive)',
+        text: 'var(--foreground)',
+        muted: 'var(--muted-foreground)',
+        borderLine: 'var(--border)',
+        primaryFg: 'var(--primary-foreground)',
+        secondaryFg: 'var(--secondary-foreground)',
+        cardFg: 'var(--card-foreground)',
       },
       fontFamily: {
         display: ['var(--font-orbitron)', 'sans-serif'],
@@ -26,11 +31,11 @@ const config: Config = {
         numbers: ['var(--font-jetbrains-mono)', 'monospace'],
       },
       boxShadow: {
-        glow: '0 0 30px rgba(124, 58, 237, 0.35)',
-        cyan: '0 0 30px rgba(6, 182, 212, 0.25)',
+        glow: '0 20px 60px rgba(255, 224, 194, 0.18)',
+        cyan: '0 18px 54px rgba(100, 74, 64, 0.28)',
       },
       backgroundImage: {
-        grid: 'radial-gradient(circle at 1px 1px, rgba(148,163,184,0.12) 1px, transparent 0)',
+        grid: 'radial-gradient(circle at 1px 1px, rgba(255,224,194,0.08) 1px, transparent 0)',
       },
       animation: {
         float: 'float 6s ease-in-out infinite',
@@ -43,8 +48,8 @@ const config: Config = {
           '50%': { transform: 'translateY(-10px)' },
         },
         pulseGlow: {
-          '0%, 100%': { boxShadow: '0 0 0 rgba(124,58,237,0.2)' },
-          '50%': { boxShadow: '0 0 30px rgba(124,58,237,0.45)' },
+          '0%, 100%': { boxShadow: '0 0 0 rgba(255,224,194,0.18)' },
+          '50%': { boxShadow: '0 0 34px rgba(255,224,194,0.28)' },
         },
         drift: {
           '0%': { transform: 'translateX(0)' },
@@ -57,4 +62,3 @@ const config: Config = {
 }
 
 export default config
-

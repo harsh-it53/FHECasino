@@ -19,6 +19,7 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
     error DecryptResultNotReady(bytes32 sessionId);
     error GameAlreadyActivated(bytes32 sessionId);
     error GameNotReady(bytes32 sessionId, uint64 readyBlock);
+    error InvalidRevealSignature(bytes32 sessionId);
     error InvalidMineIndex(uint8 provided, uint8 mineCount);
     error InvalidMineCount(uint8 provided, uint8 minMines, uint8 maxMines);
     error InvalidTileCoordinates(uint8 x, uint8 y);
@@ -40,6 +41,8 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
 
     mapping(bytes32 => MinesMetadata) public minesMetadata;
     mapping(bytes32 => mapping(uint8 => bool)) public tileOpened;
+    mapping(bytes32 => uint8) public revealedSafeRevealCount;
+    mapping(bytes32 => uint32) public revealedCurrentMultiplierBps;
 
     mapping(bytes32 => euint32) private _playerEntropy;
     mapping(bytes32 => uint32) private _plaintextPlayerEntropy;
@@ -48,6 +51,7 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
     mapping(bytes32 => euint32) private _currentMultiplierBps;
     mapping(bytes32 => ebool) private _busted;
     mapping(bytes32 => ebool) private _lastRevealWasMine;
+    mapping(bytes32 => euint32) private _lastRevealCode;
     mapping(bytes32 => mapping(uint8 => euint32)) private _minePositions;
 
     event MinesGameRequested(
@@ -244,7 +248,9 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
             revert GameNotReady(sessionId, _entropyReadyBlock(sessionId));
         }
         if (metadata.pendingReveal) {
-            revert PendingReveal(sessionId);
+            if (_resolvePendingReveal(sessionId, session, metadata)) {
+                return;
+            }
         }
         if (metadata.pendingCashout) {
             revert PendingCashout(sessionId);
@@ -261,32 +267,20 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
         tileOpened[sessionId][tileIndex] = true;
 
         ebool isMine = _isMineTile(sessionId, metadata.mineCount, tileIndex);
-        euint32 incrementedSafeCount = FHE.add(_safeRevealCount[sessionId], ENCRYPTED_ONE_U32);
-        euint32 nextSafeCount = FHE.select(isMine, _safeRevealCount[sessionId], incrementedSafeCount);
-        euint32 nextMultiplierBps = FHE.select(
-            isMine,
-            ENCRYPTED_ZERO_U32,
-            _multiplierForRevealCount(metadata.mineCount, nextSafeCount)
-        );
 
         _lastRevealWasMine[sessionId] = isMine;
-        _safeRevealCount[sessionId] = nextSafeCount;
-        _currentMultiplierBps[sessionId] = nextMultiplierBps;
+        _lastRevealCode[sessionId] = FHE.select(isMine, ENCRYPTED_ONE_U32, ENCRYPTED_ZERO_U32);
         _busted[sessionId] = FHE.select(isMine, ENCRYPTED_TRUE, _busted[sessionId]);
 
         FHE.allowThis(_lastRevealWasMine[sessionId]);
-        FHE.allowThis(_safeRevealCount[sessionId]);
-        FHE.allowThis(_currentMultiplierBps[sessionId]);
+        FHE.allowThis(_lastRevealCode[sessionId]);
         FHE.allowThis(_busted[sessionId]);
 
         _grantViewerAccess(msg.sender, _lastRevealWasMine[sessionId]);
-        _grantViewerAccess(msg.sender, _safeRevealCount[sessionId]);
-        _grantViewerAccess(msg.sender, _currentMultiplierBps[sessionId]);
+        _grantViewerAccess(msg.sender, _lastRevealCode[sessionId]);
         _grantViewerAccess(msg.sender, _busted[sessionId]);
 
-        FHE.decrypt(_lastRevealWasMine[sessionId]);
-        FHE.decrypt(_safeRevealCount[sessionId]);
-        FHE.decrypt(_currentMultiplierBps[sessionId]);
+        _scheduleDecryptForContract(_lastRevealCode[sessionId]);
 
         metadata.pendingReveal = true;
         metadata.lastTileIndex = tileIndex;
@@ -307,19 +301,27 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
             revert NoPendingReveal(sessionId);
         }
 
-        bool decrypted;
-        (hitMine, decrypted) = FHE.getDecryptResultSafe(_lastRevealWasMine[sessionId]);
-        if (!decrypted) {
-            revert DecryptResultNotReady(sessionId);
+        hitMine = _resolvePendingReveal(sessionId, session, metadata);
+    }
+
+    function publishRevealResult(bytes32 sessionId, uint32 revealCode, bytes calldata signature)
+        external
+        whenNotPaused
+        nonReentrant
+        returns (bool hitMine)
+    {
+        GameSession storage session = _requirePlayerActiveSession(sessionId, msg.sender);
+        MinesMetadata storage metadata = minesMetadata[sessionId];
+
+        if (!metadata.pendingReveal) {
+            revert NoPendingReveal(sessionId);
+        }
+        if (!FHE.verifyDecryptResultSafe(_lastRevealCode[sessionId], revealCode, signature)) {
+            revert InvalidRevealSignature(sessionId);
         }
 
-        metadata.pendingReveal = false;
-
-        emit TileRevealFinalized(sessionId, session.player, metadata.lastTileIndex, hitMine);
-
-        if (hitMine) {
-            _finalizeSession(sessionId, SessionStatus.LOST, 0);
-        }
+        FHE.publishDecryptResult(_lastRevealCode[sessionId], revealCode, signature);
+        hitMine = _resolvePendingReveal(sessionId, session, metadata);
     }
 
     function requestCashout(bytes32 sessionId) external whenNotPaused nonReentrant {
@@ -330,17 +332,15 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
             revert GameNotReady(sessionId, _entropyReadyBlock(sessionId));
         }
         if (metadata.pendingReveal) {
-            revert PendingReveal(sessionId);
+            if (_resolvePendingReveal(sessionId, session, metadata)) {
+                return;
+            }
         }
         if (metadata.pendingCashout) {
             revert PendingCashout(sessionId);
         }
 
         metadata.pendingCashout = true;
-
-        _grantViewerAccess(msg.sender, _currentMultiplierBps[sessionId]);
-        _grantViewerAccess(msg.sender, _safeRevealCount[sessionId]);
-        FHE.decrypt(_currentMultiplierBps[sessionId]);
 
         emit CashoutRequested(sessionId, session.player);
     }
@@ -358,15 +358,9 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
             revert NoPendingCashout(sessionId);
         }
 
-        uint32 multiplierBps;
-        bool decrypted;
-        (multiplierBps, decrypted) = FHE.getDecryptResultSafe(_currentMultiplierBps[sessionId]);
-        if (!decrypted) {
-            revert DecryptResultNotReady(sessionId);
-        }
-
         metadata.pendingCashout = false;
 
+        uint32 multiplierBps = revealedCurrentMultiplierBps[sessionId];
         grossPayout = (uint256(session.wager) * multiplierBps) / BPS_DENOMINATOR;
         (netPayout, houseFee) = _finalizeSession(sessionId, SessionStatus.CASHED_OUT, grossPayout);
 
@@ -398,7 +392,8 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
         returns (uint32 safeRevealCount, bool ready)
     {
         _validateSessionPlayer(sessionId, msg.sender);
-        (safeRevealCount, ready) = FHE.getDecryptResultSafe(_safeRevealCount[sessionId]);
+        safeRevealCount = uint32(revealedSafeRevealCount[sessionId]);
+        ready = !minesMetadata[sessionId].pendingReveal;
     }
 
     function getCurrentMultiplierBps(bytes32 sessionId) external view returns (euint32) {
@@ -412,7 +407,8 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
         returns (uint32 multiplierBps, bool ready)
     {
         _validateSessionPlayer(sessionId, msg.sender);
-        (multiplierBps, ready) = FHE.getDecryptResultSafe(_currentMultiplierBps[sessionId]);
+        multiplierBps = revealedCurrentMultiplierBps[sessionId];
+        ready = !minesMetadata[sessionId].pendingReveal;
     }
 
     function getLastRevealWasMine(bytes32 sessionId) external view returns (ebool) {
@@ -420,9 +416,16 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
         return _lastRevealWasMine[sessionId];
     }
 
+    function getLastRevealCode(bytes32 sessionId) external view returns (euint32) {
+        _requireExistingSession(sessionId);
+        return _lastRevealCode[sessionId];
+    }
+
     function readLastReveal(bytes32 sessionId) external view returns (bool hitMine, bool ready) {
         _validateSessionPlayer(sessionId, msg.sender);
-        (hitMine, ready) = FHE.getDecryptResultSafe(_lastRevealWasMine[sessionId]);
+        uint32 revealCode;
+        (revealCode, ready) = FHE.getDecryptResultSafe(_lastRevealCode[sessionId]);
+        hitMine = ready && revealCode != 0;
     }
 
     function getBustedState(bytes32 sessionId) external view returns (ebool) {
@@ -466,12 +469,16 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
         _currentMultiplierBps[sessionId] = FHE.asEuint32(BASE_MULTIPLIER_BPS);
         _busted[sessionId] = ENCRYPTED_FALSE;
         _lastRevealWasMine[sessionId] = ENCRYPTED_FALSE;
+        _lastRevealCode[sessionId] = ENCRYPTED_ZERO_U32;
+        revealedSafeRevealCount[sessionId] = 0;
+        revealedCurrentMultiplierBps[sessionId] = BASE_MULTIPLIER_BPS;
 
         FHE.allowThis(_playerEntropy[sessionId]);
         FHE.allowThis(_safeRevealCount[sessionId]);
         FHE.allowThis(_currentMultiplierBps[sessionId]);
         FHE.allowThis(_busted[sessionId]);
         FHE.allowThis(_lastRevealWasMine[sessionId]);
+        FHE.allowThis(_lastRevealCode[sessionId]);
     }
 
     function _initializeMineGrid(bytes32 sessionId, uint8 mineCount, euint64 encryptedSeed) internal {
@@ -581,6 +588,39 @@ contract FHEMines is FHEGameBase, FHEHybridEntropy {
         for (uint8 mineIndex = 0; mineIndex < mineCount; mineIndex++) {
             ebool isMatch = FHE.eq(_minePositions[sessionId][mineIndex], encryptedTileIndex);
             isMine = FHE.select(isMatch, ENCRYPTED_TRUE, isMine);
+        }
+    }
+
+    function _resolvePendingReveal(
+        bytes32 sessionId,
+        GameSession storage session,
+        MinesMetadata storage metadata
+    ) internal returns (bool hitMine) {
+        uint32 revealCode;
+        bool decrypted;
+        (revealCode, decrypted) = FHE.getDecryptResultSafe(_lastRevealCode[sessionId]);
+        if (!decrypted) {
+            revert DecryptResultNotReady(sessionId);
+        }
+        hitMine = revealCode != 0;
+
+        metadata.pendingReveal = false;
+
+        emit TileRevealFinalized(sessionId, session.player, metadata.lastTileIndex, hitMine);
+
+        if (hitMine) {
+            _finalizeSession(sessionId, SessionStatus.LOST, 0);
+        } else {
+            uint8 nextSafeRevealCount = revealedSafeRevealCount[sessionId] + 1;
+            uint32 nextMultiplierBps = _multiplierTableBps(metadata.mineCount, nextSafeRevealCount);
+
+            revealedSafeRevealCount[sessionId] = nextSafeRevealCount;
+            revealedCurrentMultiplierBps[sessionId] = nextMultiplierBps;
+            _safeRevealCount[sessionId] = FHE.asEuint32(nextSafeRevealCount);
+            _currentMultiplierBps[sessionId] = FHE.asEuint32(nextMultiplierBps);
+
+            FHE.allowThis(_safeRevealCount[sessionId]);
+            FHE.allowThis(_currentMultiplierBps[sessionId]);
         }
     }
 

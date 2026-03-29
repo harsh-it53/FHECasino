@@ -159,8 +159,8 @@ describe('FHEMines', function () {
     const currentMultiplierBps = await mines.getCurrentMultiplierBps(sessionId)
 
     expect(await taskManager.mockStorage(lastRevealWasMine)).to.equal(0n)
-    expect(await taskManager.mockStorage(safeRevealCount)).to.equal(1n)
-    expect(await taskManager.mockStorage(currentMultiplierBps)).to.equal(11_363n)
+    expect(await taskManager.mockStorage(safeRevealCount)).to.equal(0n)
+    expect(await taskManager.mockStorage(currentMultiplierBps)).to.equal(10_000n)
 
     await time.increase(12)
     const [readableLastReveal, revealReady] = await mines.connect(player).readLastReveal(sessionId)
@@ -176,11 +176,77 @@ describe('FHEMines', function () {
     expect(metadataAfterFinalize.pendingReveal).to.equal(false)
     expect(readableLastReveal).to.equal(false)
     expect(revealReady).to.equal(true)
-    expect(readableSafeRevealCount).to.equal(1n)
-    expect(safeRevealCountReady).to.equal(true)
-    expect(readableMultiplier).to.equal(11_363n)
-    expect(multiplierReady).to.equal(true)
+    expect(readableSafeRevealCount).to.equal(0n)
+    expect(safeRevealCountReady).to.equal(false)
+    expect(readableMultiplier).to.equal(10_000n)
+    expect(multiplierReady).to.equal(false)
     expect(Number(session.status)).to.equal(1)
+  })
+
+  it('lets the next reveal continue the round once the previous reveal is ready', async function () {
+    const { player, taskManager, mines } = await loadFixture(deployFixture)
+
+    const wager = hre.ethers.parseEther('0.01')
+    await mines.connect(player).startGameWithPlaintextSeed(3, 0, { value: wager })
+
+    const sessionId = await mines.activeSessionIdByPlayer(player.address)
+    const minePositions = await readMinePositions(mines, taskManager, sessionId)
+    const safeTiles = Array.from({ length: 25 }, (_, tileIndex) => tileIndex).filter(
+      (tileIndex) => !minePositions.includes(tileIndex),
+    )
+
+    await mines.connect(player).revealTile(sessionId, safeTiles[0] % 5, Math.floor(safeTiles[0] / 5))
+    await time.increase(12)
+
+    await mines.connect(player).revealTile(sessionId, safeTiles[1] % 5, Math.floor(safeTiles[1] / 5))
+
+    const metadataAfterSecondReveal = await mines.minesMetadata(sessionId)
+    const safeRevealCount = await mines.getSafeRevealCount(sessionId)
+    const currentMultiplierBps = await mines.getCurrentMultiplierBps(sessionId)
+
+    expect(metadataAfterSecondReveal.pendingReveal).to.equal(true)
+    expect(metadataAfterSecondReveal.lastTileIndex).to.equal(safeTiles[1])
+    expect(await mines.tileOpened(sessionId, safeTiles[0])).to.equal(true)
+    expect(await mines.tileOpened(sessionId, safeTiles[1])).to.equal(true)
+    expect(await taskManager.mockStorage(safeRevealCount)).to.equal(1n)
+    expect(await taskManager.mockStorage(currentMultiplierBps)).to.equal(11_363n)
+  })
+
+  it('lets cashout continue directly after a ready safe reveal without a manual finalize', async function () {
+    const { player, taskManager, vault, mines } = await loadFixture(deployFixture)
+
+    const wager = hre.ethers.parseEther('0.05')
+    await mines.connect(player).startGameWithPlaintextSeed(3, 0, { value: wager })
+
+    const sessionId = await mines.activeSessionIdByPlayer(player.address)
+    const minePositions = await readMinePositions(mines, taskManager, sessionId)
+    const safeTileIndex = Array.from({ length: 25 }, (_, tileIndex) => tileIndex).find(
+      (tileIndex) => !minePositions.includes(tileIndex),
+    )
+    expect(safeTileIndex).to.not.equal(undefined)
+
+    await mines
+      .connect(player)
+      .revealTile(sessionId, (safeTileIndex as number) % 5, Math.floor((safeTileIndex as number) / 5))
+    await time.increase(12)
+
+    await mines.connect(player).requestCashout(sessionId)
+
+    const metadataAfterCashoutRequest = await mines.minesMetadata(sessionId)
+    expect(metadataAfterCashoutRequest.pendingReveal).to.equal(false)
+    expect(metadataAfterCashoutRequest.pendingCashout).to.equal(true)
+
+    await time.increase(12)
+
+    const grossPayout = (wager * 11_363n) / 10_000n
+    const profit = grossPayout - wager
+    const expectedHouseFee = (profit * 100n) / 10_000n
+    const expectedNetPayout = grossPayout - expectedHouseFee
+
+    await expect(mines.connect(player).finalizeCashout(sessionId)).to.changeEtherBalances(
+      [vault, player],
+      [-expectedNetPayout, expectedNetPayout]
+    )
   })
 
   it('settles the round as a loss when the revealed tile is a mine', async function () {

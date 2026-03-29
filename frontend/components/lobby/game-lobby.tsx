@@ -83,11 +83,11 @@ export function GameLobby() {
       <div className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-7xl gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="glass-panel flex flex-col rounded-[32px] p-6">
           <div>
-            <p className="font-heading text-xs uppercase tracking-[0.38em] text-cyan/80">Casino Lobby</p>
-            <h1 className="mt-4 font-display text-4xl uppercase tracking-[0.18em] text-white">
+            <p className="font-heading text-xs uppercase tracking-[0.38em] text-purple/80">Casino Lobby</p>
+            <h1 className="mt-4 font-display text-4xl uppercase tracking-[0.18em] text-text">
               FHE Casino
             </h1>
-            <p className="mt-4 text-sm leading-7 text-slate-300">
+            <p className="mt-4 text-sm leading-7 text-muted">
               Contract-backed lobby for encrypted Mines, Crash, HiLo, and Plinko.
             </p>
           </div>
@@ -104,14 +104,14 @@ export function GameLobby() {
                 <Link
                   key={game.slug}
                   href={`/${game.slug}`}
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4 transition hover:border-cyan/30 hover:bg-cyan/10"
+                  className="flex items-center justify-between rounded-2xl border border-borderLine/80 bg-panel/70 px-4 py-4 transition hover:border-purple/30 hover:bg-accent/75"
                 >
                   <div>
-                    <p className="font-heading text-sm uppercase tracking-[0.18em] text-white">{game.title}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">{game.pattern}</p>
+                    <p className="font-heading text-sm uppercase tracking-[0.18em] text-text">{game.title}</p>
+                    <p className="mt-1 text-xs uppercase tracking-[0.2em] text-muted/75">{game.pattern}</p>
                   </div>
                   <span className={`font-heading text-[11px] uppercase tracking-[0.24em] ${
-                    deployedAddress ? 'text-cyan' : 'text-danger'
+                    deployedAddress ? 'text-purple' : 'text-danger'
                   }`}>
                     {deployedAddress ? 'Live' : 'Missing'}
                   </span>
@@ -120,27 +120,27 @@ export function GameLobby() {
             })}
           </div>
 
-          <div className="mt-auto rounded-[28px] border border-cyan/20 bg-cyan/10 p-5">
-            <p className="font-heading text-xs uppercase tracking-[0.3em] text-cyan">Deployment</p>
-            <p className="mt-3 text-sm leading-7 text-slate-200">
+          <div className="mt-auto rounded-[28px] border border-purple/20 bg-purple/10 p-5">
+            <p className="font-heading text-xs uppercase tracking-[0.3em] text-purple">Deployment</p>
+            <p className="mt-3 text-sm leading-7 text-text">
               {hasFullCasinoDeployment
                 ? `Vault ${truncateHex(vaultAddress!)} is wired and every game route is ready to use.`
                 : 'Set the NEXT_PUBLIC contract addresses to unlock the full lobby and game flows.'}
             </p>
-            <p className="mt-3 text-xs uppercase tracking-[0.24em] text-slate-300">
+            <p className="mt-3 text-xs uppercase tracking-[0.24em] text-muted">
               Wallet: {address ? truncateHex(address) : 'Disconnected'}
             </p>
           </div>
         </aside>
 
         <section className="glass-panel rounded-[32px] p-6 sm:p-8">
-          <div className="flex flex-col gap-6 border-b border-white/10 pb-8 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-6 border-b border-borderLine/80 pb-8 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="font-heading text-xs uppercase tracking-[0.36em] text-cyan/80">Vault Overview</p>
-              <h2 className="mt-3 font-heading text-4xl uppercase tracking-[0.15em] text-white">
+              <p className="font-heading text-xs uppercase tracking-[0.36em] text-purple/80">Vault Overview</p>
+              <h2 className="mt-3 font-heading text-4xl uppercase tracking-[0.15em] text-text">
                 Encrypted House
               </h2>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-muted">
                 The lobby now reads live vault metrics and routes directly into each contract-backed
                 game module.
               </p>
@@ -168,28 +168,28 @@ export function GameLobby() {
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-8 rounded-[28px] border border-white/10 bg-black/20 p-6"
+            className="mt-8 rounded-[28px] border border-borderLine/80 bg-panel/72 p-6"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="font-heading text-xs uppercase tracking-[0.34em] text-cyan/75">
+                <p className="font-heading text-xs uppercase tracking-[0.34em] text-purple/75">
                   Wallet Readiness
                 </p>
                 <p className={`mt-3 font-heading text-sm uppercase tracking-[0.24em] ${readinessTone}`}>
                   {readinessLabel}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.22em] text-slate-400">
+              <div className="flex flex-wrap gap-2 text-xs uppercase tracking-[0.22em] text-muted/80">
                 <span>Chain: {chainId}</span>
                 <span>Expected: {expectedChainName ?? 'Not pinned'}</span>
               </div>
             </div>
-            <p className="mt-4 text-sm leading-7 text-slate-300">{readinessMessage}</p>
+            <p className="mt-4 text-sm leading-7 text-muted">{readinessMessage}</p>
           </motion.div>
 
           <div className="mt-8 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-            <div className="rounded-[28px] border border-white/10 bg-black/20 p-6">
-              <p className="font-heading text-xs uppercase tracking-[0.34em] text-cyan/75">
+            <div className="rounded-[28px] border border-borderLine/80 bg-panel/72 p-6">
+              <p className="font-heading text-xs uppercase tracking-[0.34em] text-purple/75">
                 Live Modules
               </p>
               <div className="mt-6 space-y-4">
@@ -199,14 +199,14 @@ export function GameLobby() {
                   return (
                     <div
                       key={game.slug}
-                      className="rounded-[24px] border border-white/10 bg-white/5 p-5"
+                      className="rounded-[24px] border border-borderLine/80 bg-canvas/45 p-5"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <p className="font-heading text-lg uppercase tracking-[0.16em] text-white">
+                          <p className="font-heading text-lg uppercase tracking-[0.16em] text-text">
                             {game.title}
                           </p>
-                          <p className="mt-2 text-sm leading-7 text-slate-300">{game.summary}</p>
+                          <p className="mt-2 text-sm leading-7 text-muted">{game.summary}</p>
                         </div>
                         <span className={`rounded-full border px-3 py-2 font-heading text-[11px] uppercase tracking-[0.24em] ${
                           deployedAddress
@@ -217,12 +217,12 @@ export function GameLobby() {
                         </span>
                       </div>
                       <div className="mt-4 flex items-center justify-between gap-4">
-                        <span className="font-numbers text-sm text-slate-400">
+                        <span className="font-numbers text-sm text-muted/80">
                           {deployedAddress ? truncateHex(deployedAddress) : 'Awaiting env wiring'}
                         </span>
                         <Link
                           href={`/${game.slug}`}
-                          className="rounded-full border border-cyan/30 bg-cyan/10 px-4 py-2 font-heading text-xs uppercase tracking-[0.24em] text-cyan transition hover:bg-cyan/20"
+                          className="rounded-full border border-purple/30 bg-purple/10 px-4 py-2 font-heading text-xs uppercase tracking-[0.24em] text-purple transition hover:bg-purple/20"
                         >
                           Open {game.title}
                         </Link>
@@ -234,20 +234,20 @@ export function GameLobby() {
             </div>
 
             <div className="space-y-6">
-              <div className="rounded-[28px] border border-white/10 bg-black/20 p-6">
-                <p className="font-heading text-xs uppercase tracking-[0.34em] text-cyan/75">
+              <div className="rounded-[28px] border border-borderLine/80 bg-panel/72 p-6">
+                <p className="font-heading text-xs uppercase tracking-[0.34em] text-purple/75">
                   Buildathon Notes
                 </p>
                 <div className="mt-4 grid gap-3">
-                  <MiniMetric label="Frontend" value="Contract-backed game routes" tone="text-cyan" />
-                  <MiniMetric label="Contracts" value="4 encrypted games + vault" tone="text-white" />
+                  <MiniMetric label="Frontend" value="Contract-backed game routes" tone="text-purple" />
+                  <MiniMetric label="Contracts" value="4 encrypted games + vault" tone="text-text" />
                   <MiniMetric label="Decryption" value="Async player-readable settle flow" tone="text-success" />
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-white/10 bg-black/20 p-6">
-                <p className="font-heading text-xs uppercase tracking-[0.34em] text-cyan/75">Next Step</p>
-                <p className="mt-4 text-sm leading-7 text-slate-300">
+              <div className="rounded-[28px] border border-borderLine/80 bg-panel/72 p-6">
+                <p className="font-heading text-xs uppercase tracking-[0.34em] text-purple/75">Next Step</p>
+                <p className="mt-4 text-sm leading-7 text-muted">
                   Open any game to start wagers, async finalize steps, and post-settlement reveals
                   directly against the deployed Fhenix contracts.
                 </p>
@@ -262,9 +262,9 @@ export function GameLobby() {
 
 function TopMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-      <p className="font-heading text-[10px] uppercase tracking-[0.3em] text-slate-500">{label}</p>
-      <p className="mt-3 font-numbers text-xl text-white">{value}</p>
+    <div className="rounded-2xl border border-borderLine/80 bg-panel/72 p-4">
+      <p className="font-heading text-[10px] uppercase tracking-[0.3em] text-muted/75">{label}</p>
+      <p className="mt-3 font-numbers text-xl text-text">{value}</p>
     </div>
   )
 }
@@ -279,8 +279,8 @@ function MiniMetric({
   tone: string
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-      <p className="font-heading text-[10px] uppercase tracking-[0.3em] text-slate-500">{label}</p>
+    <div className="rounded-2xl border border-borderLine/80 bg-panel/72 p-4">
+      <p className="font-heading text-[10px] uppercase tracking-[0.3em] text-muted/75">{label}</p>
       <p className={`mt-3 font-numbers text-lg ${tone}`}>{value}</p>
     </div>
   )

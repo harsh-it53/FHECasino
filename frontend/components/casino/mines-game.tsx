@@ -2,7 +2,7 @@
 
 import { EncryptStep } from '@cofhe/sdk'
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   useAccount,
   useBlockNumber,
@@ -69,6 +69,8 @@ export function MinesGame() {
   const [txLabel, setTxLabel] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isEncryptingEntropy, setIsEncryptingEntropy] = useState(false)
+  const [queuedTileIndex, setQueuedTileIndex] = useState<number | null>(null)
+  const queuedRevealRequestKeyRef = useRef<string | null>(null)
   const { sessionId, session, minBet, maxBet, houseEdgeBps } = useGameBaseState(gameAddress)
   const { writeContractAsync, data: txHash, isPending: isSending } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
@@ -165,6 +167,8 @@ export function MinesGame() {
   const lastTileIndex = Number(metadata?.[1] ?? BigInt(0))
   const lastRevealWasMine = lastReveal?.[1] ? lastReveal[0] : false
   const lastRevealReady = lastReveal?.[1] ?? false
+  const resolvedRevealWasMine = lastRevealReady ? lastRevealWasMine : null
+  const revealAdvanceReady = !pendingReveal || lastRevealReady
   const isBusy = isSending || isConfirming || isEncryptingEntropy
   const cofheSupported = supportsCofheChain(chainId)
   const walletReady = Boolean(isConnected && (!expectedChainId || chainId === expectedChainId))
@@ -188,9 +192,13 @@ export function MinesGame() {
   const currentRevealLabel = !roundReady
     ? 'Activate round first'
     : pendingReveal
-      ? 'Waiting for decrypt'
-      : lastReveal?.[1]
-        ? lastRevealWasMine
+      ? resolvedRevealWasMine === true
+        ? 'Mine hit'
+        : resolvedRevealWasMine === false
+          ? 'Safe tile'
+          : 'Waiting for decrypt'
+      : resolvedRevealWasMine !== null
+        ? resolvedRevealWasMine
           ? 'Mine hit'
           : 'Safe tile'
         : 'Not resolved yet'
@@ -200,7 +208,9 @@ export function MinesGame() {
         ? 'Ready To Activate'
         : 'Entropy Pending'
       : pendingReveal
-        ? 'Reveal Pending'
+        ? lastRevealReady
+          ? 'Ready To Continue'
+          : 'Reveal Pending'
         : pendingCashout
           ? 'Cashout Pending'
           : currentStatus
@@ -210,14 +220,20 @@ export function MinesGame() {
       ? 'danger'
       : !roundReady && sessionId
         ? 'gold'
-        : pendingReveal || pendingCashout
+        : (pendingReveal && resolvedRevealWasMine === null) || pendingCashout
           ? 'gold'
           : 'cyan'
 
   const txMessage = actionError
     ? actionError
-    : pendingReveal && !lastRevealReady
-      ? 'Secure tile reveal is processing. Finalize unlocks as soon as the private result is ready.'
+    : pendingReveal && resolvedRevealWasMine === null
+      ? 'Secure tile reveal is processing. The browser is waiting for the private result.'
+      : pendingReveal && resolvedRevealWasMine !== null && !lastRevealReady
+        ? resolvedRevealWasMine
+          ? 'Mine revealed. The chain is still syncing the loss before the round can fully settle.'
+          : 'Safe tile confirmed. The chain is syncing the reveal so the next wager action can continue cleanly.'
+      : pendingReveal && lastRevealReady
+        ? 'Latest reveal is ready. Select another tile or request cashout and the round will carry the reveal forward automatically.'
       : pendingCashout && !currentMultiplierReady
         ? 'Secure cashout settlement is processing. Finalize unlocks as soon as the payout result is ready.'
         : isEncryptingEntropy
@@ -227,8 +243,104 @@ export function MinesGame() {
         : isConfirmed && txLabel
           ? `${txLabel} confirmed.`
           : txHash && txLabel
-            ? `${txLabel} submitted.`
+          ? `${txLabel} submitted.`
             : null
+
+  useEffect(() => {
+    if (
+      queuedTileIndex === null ||
+      !sessionId ||
+      !revealAdvanceReady ||
+      isBusy ||
+      pendingCashout ||
+      currentStatus !== 'Active'
+    ) {
+      return
+    }
+
+    const requestKey = `${sessionId}-${queuedTileIndex}`
+    if (queuedRevealRequestKeyRef.current === requestKey) {
+      return
+    }
+
+    queuedRevealRequestKeyRef.current = requestKey
+    setQueuedTileIndex(null)
+    void revealTile(queuedTileIndex).finally(() => {
+      queuedRevealRequestKeyRef.current = null
+    })
+  }, [
+    queuedTileIndex,
+    sessionId,
+    revealAdvanceReady,
+    isBusy,
+    pendingCashout,
+    currentStatus,
+  ])
+
+  const needsFastPolling = Boolean(
+    sessionId &&
+      (isBusy ||
+        !roundReady ||
+        pendingReveal ||
+        pendingCashout ||
+        (entropyReadyBlock > 0 && !entropyWindowReady))
+  )
+
+  useEffect(() => {
+    if (!sessionId || !needsFastPolling) {
+      return
+    }
+
+    const refreshSessionState = () => {
+      void Promise.allSettled([
+        metadataQuery.refetch(),
+        entropyStateQuery.refetch(),
+        safeRevealQuery.refetch(),
+        multiplierQuery.refetch(),
+        lastRevealQuery.refetch(),
+        tileOpenedQuery.refetch(),
+      ])
+    }
+
+    refreshSessionState()
+    const intervalId = window.setInterval(refreshSessionState, 1250)
+
+    return () => window.clearInterval(intervalId)
+  }, [
+    sessionId,
+    needsFastPolling,
+    metadataQuery,
+    entropyStateQuery,
+    safeRevealQuery,
+    multiplierQuery,
+    lastRevealQuery,
+    tileOpenedQuery,
+  ])
+
+  useEffect(() => {
+    if (!sessionId || (!txHash && !isConfirmed)) {
+      return
+    }
+
+    void Promise.allSettled([
+      metadataQuery.refetch(),
+      entropyStateQuery.refetch(),
+      safeRevealQuery.refetch(),
+      multiplierQuery.refetch(),
+      lastRevealQuery.refetch(),
+      tileOpenedQuery.refetch(),
+    ])
+  }, [
+    sessionId,
+    txHash,
+    isConfirmed,
+    metadataQuery,
+    entropyStateQuery,
+    safeRevealQuery,
+    multiplierQuery,
+    lastRevealQuery,
+    tileOpenedQuery,
+  ])
 
   async function writeWithEstimatedGas(request: {
     address: `0x${string}`
@@ -349,6 +461,27 @@ export function MinesGame() {
     )
   }
 
+  function handleTileSelection(tileIndex: number) {
+    if (
+      !sessionId ||
+      !roundReady ||
+      isBusy ||
+      pendingCashout ||
+      (openedTiles[tileIndex] ?? false)
+    ) {
+      return
+    }
+
+    if (!revealAdvanceReady) {
+      setQueuedTileIndex(tileIndex)
+      setTxLabel(`Queued tile ${tileIndex + 1}`)
+      setActionError(null)
+      return
+    }
+
+    void revealTile(tileIndex)
+  }
+
   async function finalizeReveal() {
     if (!gameAddress || !sessionId) {
       return
@@ -426,10 +559,10 @@ export function MinesGame() {
         <div className="glass-panel rounded-[32px] p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="font-heading text-xs uppercase tracking-[0.32em] text-cyan/75">
+              <p className="font-heading text-xs uppercase tracking-[0.32em] text-purple/75">
                 Encrypted Grid
               </p>
-              <h2 className="mt-3 font-heading text-3xl uppercase tracking-[0.16em] text-white">
+              <h2 className="mt-3 font-heading text-3xl uppercase tracking-[0.16em] text-text">
                 Open Safe Tiles
               </h2>
             </div>
@@ -440,7 +573,11 @@ export function MinesGame() {
             {Array.from({ length: 25 }, (_, tileIndex) => {
               const isOpened = openedTiles[tileIndex] ?? false
               const isLastTile = tileIndex === lastTileIndex
-              const showMine = isOpened && isLastTile && lastRevealWasMine
+              const isPendingTile = isOpened && isLastTile && pendingReveal
+              const showMine = isOpened && isLastTile && resolvedRevealWasMine === true
+              const showPendingTile = isPendingTile && resolvedRevealWasMine === null
+              const showConfirmedSafe = isOpened && !showMine && !showPendingTile
+              const isQueuedTile = queuedTileIndex === tileIndex
 
               return (
                 <motion.button
@@ -450,31 +587,42 @@ export function MinesGame() {
                     !sessionId ||
                     !roundReady ||
                     isBusy ||
-                    pendingReveal ||
                     pendingCashout ||
                     isOpened
                   }
-                  onClick={() => revealTile(tileIndex)}
+                  onClick={() => handleTileSelection(tileIndex)}
                   initial={{ opacity: 0, scale: 0.94 }}
                   animate={{
                     opacity: 1,
-                    scale: showMine ? 1.03 : 1,
+                    scale: showMine || isQueuedTile ? 1.03 : 1,
                     rotate: showMine ? [0, -1.5, 1.5, 0] : 0,
                   }}
-                  whileHover={isOpened || !roundReady ? undefined : { y: -3, scale: 1.02 }}
-                  whileTap={isOpened || !roundReady ? undefined : { scale: 0.97 }}
+                  whileHover={isOpened || !roundReady || pendingCashout ? undefined : { y: -3, scale: 1.02 }}
+                  whileTap={isOpened || !roundReady || pendingCashout ? undefined : { scale: 0.97 }}
                   transition={{ duration: 0.2 }}
                   className={`aspect-square rounded-[22px] border text-sm transition ${
                     showMine
                       ? 'border-danger/60 bg-danger/20 text-danger'
-                      : isOpened
-                        ? 'border-cyan/40 bg-cyan/15 text-cyan'
+                      : showPendingTile
+                        ? 'border-cyan/45 bg-cyan/12 text-cyan'
+                        : isQueuedTile
+                          ? 'border-purple/50 bg-purple/12 text-purple'
+                      : showConfirmedSafe
+                        ? 'border-purple/40 bg-purple/12 text-purple'
                         : !roundReady
-                          ? 'border-white/10 bg-white/5 text-slate-500'
-                          : 'border-white/10 bg-white/5 text-slate-400 hover:border-cyan/40 hover:bg-cyan/10 hover:text-white'
+                          ? 'border-borderLine/80 bg-panel/70 text-muted/65'
+                          : 'border-borderLine/80 bg-panel/70 text-muted/80 hover:border-purple/40 hover:bg-purple/10 hover:text-text'
                   } disabled:cursor-not-allowed disabled:opacity-60`}
                 >
-                  {showMine ? 'Mine' : isOpened ? 'Safe' : tileIndex + 1}
+                  {showMine
+                    ? 'Mine'
+                    : showPendingTile
+                      ? '...'
+                      : isQueuedTile
+                        ? 'Queued'
+                        : showConfirmedSafe
+                          ? 'Safe'
+                          : tileIndex + 1}
                 </motion.button>
               )
             })}
@@ -494,7 +642,7 @@ export function MinesGame() {
             safeReveals={safeReveals}
           />
 
-          <p className="mt-5 text-sm leading-7 text-slate-300">
+          <p className="mt-5 text-sm leading-7 text-muted">
             Each round starts by encrypting a private browser-side seed. After the delayed entropy
             block lands, activate the round to blend public chain entropy with your hidden seed
             before revealing tiles or cashing out.
@@ -535,7 +683,7 @@ export function MinesGame() {
                   }
                   tone="primary"
                 />
-                <p className="text-xs leading-6 text-slate-400">
+                <p className="text-xs leading-6 text-muted/80">
                   Start encrypts a private 32-bit seed in your browser, proves it, and sends the
                   verified ciphertext on-chain with your wager.
                 </p>
@@ -581,14 +729,18 @@ export function MinesGame() {
                   }
                 />
                 <ActionButton
-                  label={pendingReveal && !lastRevealReady ? 'Reveal Processing...' : 'Finalize Reveal'}
+                  label={
+                    pendingReveal && !lastRevealReady
+                      ? 'Reveal Processing...'
+                      : 'Finalize Reveal'
+                  }
                   onClick={finalizeReveal}
                   disabled={
                     !walletReady ||
                     !sessionId ||
                     !pendingReveal ||
-                    !lastRevealReady ||
-                    isBusy
+                    isBusy ||
+                    !lastRevealReady
                   }
                 />
                 <ActionButton
@@ -598,7 +750,7 @@ export function MinesGame() {
                     !walletReady ||
                     !sessionId ||
                     !roundReady ||
-                    pendingReveal ||
+                    (pendingReveal && !lastRevealReady) ||
                     pendingCashout ||
                     currentStatus !== 'Active' ||
                     isBusy
@@ -626,7 +778,7 @@ export function MinesGame() {
           <StatusPanel
             message={txMessage}
             session={session}
-            finalizeHint="Activate the round after the entropy block lands. When a secure reveal or cashout is processing, the finalize control unlocks automatically once the private result is ready."
+            finalizeHint="Activate the round after the entropy block lands. Reveals settle once the contract-side decrypt result is ready on-chain, then the round can continue."
           />
         </div>
       }
@@ -654,20 +806,20 @@ function MinesProgressRail({
       : 'Ready for next pick'
 
   return (
-    <div className="mt-6 rounded-[24px] border border-white/10 bg-black/20 p-5">
+    <div className="mt-6 rounded-[24px] border border-borderLine/80 bg-panel/72 p-5">
       <div className="flex items-center justify-between gap-4">
-        <p className="font-heading text-xs uppercase tracking-[0.28em] text-slate-400">
+        <p className="font-heading text-xs uppercase tracking-[0.28em] text-muted/80">
           Safe Reveal Runway
         </p>
         <span className={`font-heading text-[11px] uppercase tracking-[0.24em] ${
-          roundReady && !pendingReveal ? 'text-cyan' : 'text-gold'
+          roundReady && !pendingReveal ? 'text-purple' : 'text-cyan'
         }`}>
           {progressLabel}
         </span>
       </div>
-      <div className="mt-4 h-3 overflow-hidden rounded-full border border-white/10 bg-white/5">
+      <div className="mt-4 h-3 overflow-hidden rounded-full border border-borderLine/80 bg-canvas/45">
         <motion.div
-          className="h-full rounded-full bg-gradient-to-r from-cyan via-cyan/70 to-success"
+          className="h-full rounded-full bg-gradient-to-r from-cyan via-purple to-success"
           initial={{ width: 0 }}
           animate={{ width: `${Math.max(progressPercent, safeReveals > 0 ? 6 : 0)}%` }}
           transition={{ type: 'spring', stiffness: 120, damping: 20 }}
@@ -683,8 +835,8 @@ function MinesProgressRail({
               key={threshold}
               className={`rounded-2xl border px-3 py-2 text-center ${
                 cleared
-                  ? 'border-cyan/35 bg-cyan/10 text-cyan'
-                  : 'border-white/10 bg-white/5 text-slate-500'
+                  ? 'border-purple/35 bg-purple/10 text-purple'
+                  : 'border-borderLine/80 bg-panel/70 text-muted/70'
               }`}
             >
               <p className="font-heading text-[10px] uppercase tracking-[0.22em]">

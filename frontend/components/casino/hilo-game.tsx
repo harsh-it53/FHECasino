@@ -2,7 +2,7 @@
 
 import { EncryptStep } from '@cofhe/sdk'
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   useAccount,
   useBlockNumber,
@@ -39,7 +39,11 @@ import {
   StatusPanel,
   useGameBaseState,
 } from '@/components/casino/game-shell'
-import { encryptUint32Input, supportsCofheChain } from '@/lib/cofhe'
+import {
+  decryptUint32ForView,
+  encryptUint32Input,
+  supportsCofheChain,
+} from '@/lib/cofhe'
 import { expectedChainId } from '@/lib/runtime-config'
 
 const encryptionStepLabels: Record<EncryptStep, string> = {
@@ -65,6 +69,8 @@ export function HiLoGame() {
   const [txLabel, setTxLabel] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isEncryptingEntropy, setIsEncryptingEntropy] = useState(false)
+  const [browserCurrentCardValue, setBrowserCurrentCardValue] = useState<number | null>(null)
+  const browserCardDecryptKeyRef = useRef<string | null>(null)
   const { sessionId, session, minBet, maxBet, houseEdgeBps } = useGameBaseState(gameAddress)
   const { writeContractAsync, data: txHash, isPending: isSending } = useWriteContract()
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
@@ -121,17 +127,27 @@ export function HiLoGame() {
       refetchInterval: 5000,
     },
   })
-
+  const currentCardHandleQuery = useReadContract({
+    address: gameAddress ?? ZERO_ADDRESS,
+    abi: hiLoAbi,
+    functionName: 'getCurrentCard',
+    args: [sessionId ?? ZERO_SESSION_ID],
+    query: {
+      enabled: Boolean(gameAddress && sessionId),
+      refetchInterval: 3000,
+    },
+  })
   const metadata = metadataQuery.data as HiLoMetadataTuple | undefined
   const entropyState = entropyStateQuery.data as HybridEntropyTuple | undefined
   const currentCard = currentCardQuery.data as ReadyUint32Tuple | undefined
   const multiplier = multiplierQuery.data as ReadyUint32Tuple | undefined
   const lastOutcome = outcomeQuery.data as ReadyUint32Tuple | undefined
+  const currentCardHandle = currentCardHandleQuery.data as `0x${string}` | undefined
   const currentStatus = resolveSessionStatus(session)
   const roundReady = metadata?.[2] ?? false
   const pendingGuess = metadata?.[3] ?? false
   const pendingCashout = metadata?.[4] ?? false
-  const currentCardValue = currentCard?.[1] ? Number(currentCard[0]) : null
+  const currentCardValue = currentCard?.[1] ? Number(currentCard[0]) : browserCurrentCardValue
   const currentMultiplierBps = multiplier?.[1] ? Number(multiplier[0]) : 10_000
   const lastOutcomeCode = lastOutcome?.[1] ? Number(lastOutcome[0]) : null
   const currentCardReady = currentCard?.[1] ?? false
@@ -144,6 +160,7 @@ export function HiLoGame() {
   const entropyWindowReady = entropyState?.[1] ?? false
   const isBusy = isSending || isConfirming || isEncryptingEntropy
   const cofheSupported = supportsCofheChain(chainId)
+  const isLocalChain = chainId === 31337 || chainId === 1337 || chainId === 420105
   const walletReady = Boolean(isConnected && (!expectedChainId || chainId === expectedChainId))
   const latestBlock = Number(currentBlockNumber ?? BigInt(0))
   const blocksUntilActivation =
@@ -196,6 +213,138 @@ export function HiLoGame() {
           : txHash && txLabel
             ? `${txLabel} submitted.`
             : null
+
+  const needsFastPolling = Boolean(
+    sessionId &&
+      (isBusy ||
+        !roundReady ||
+        pendingGuess ||
+        pendingCashout ||
+        (entropyReadyBlock > 0 && !entropyWindowReady))
+  )
+
+  useEffect(() => {
+    setBrowserCurrentCardValue(null)
+    browserCardDecryptKeyRef.current = null
+  }, [sessionId])
+
+  useEffect(() => {
+    if (pendingGuess) {
+      setBrowserCurrentCardValue(null)
+      browserCardDecryptKeyRef.current = null
+    }
+  }, [pendingGuess])
+
+  useEffect(() => {
+    if (
+      !sessionId ||
+      !roundReady ||
+      pendingGuess ||
+      currentCardReady ||
+      !currentCardHandle ||
+      !walletReady ||
+      !cofheSupported ||
+      isLocalChain ||
+      !playerAddress ||
+      !publicClient ||
+      !walletClient
+    ) {
+      return
+    }
+
+    const requestKey = `${sessionId}-${currentCardHandle}`
+    if (browserCardDecryptKeyRef.current === requestKey) {
+      return
+    }
+
+    browserCardDecryptKeyRef.current = requestKey
+
+    void (async () => {
+      try {
+        const decryptedCardValue = await decryptUint32ForView(currentCardHandle, {
+          account: playerAddress,
+          chainId,
+          publicClient,
+          walletClient,
+        })
+
+        if (decryptedCardValue !== null) {
+          setBrowserCurrentCardValue(decryptedCardValue)
+        }
+      } catch (error) {
+        setActionError(readErrorMessage(error))
+      }
+    })()
+  }, [
+    sessionId,
+    roundReady,
+    pendingGuess,
+    currentCardReady,
+    currentCardHandle,
+    walletReady,
+    cofheSupported,
+    isLocalChain,
+    playerAddress,
+    publicClient,
+    walletClient,
+    chainId,
+  ])
+
+  useEffect(() => {
+    if (!sessionId || !needsFastPolling) {
+      return
+    }
+
+    const refreshSessionState = () => {
+      void Promise.allSettled([
+        metadataQuery.refetch(),
+        entropyStateQuery.refetch(),
+        currentCardQuery.refetch(),
+        multiplierQuery.refetch(),
+        outcomeQuery.refetch(),
+        currentCardHandleQuery.refetch(),
+      ])
+    }
+
+    refreshSessionState()
+    const intervalId = window.setInterval(refreshSessionState, 1250)
+
+    return () => window.clearInterval(intervalId)
+  }, [
+    sessionId,
+    needsFastPolling,
+    metadataQuery,
+    entropyStateQuery,
+    currentCardQuery,
+    multiplierQuery,
+    outcomeQuery,
+    currentCardHandleQuery,
+  ])
+
+  useEffect(() => {
+    if (!sessionId || (!txHash && !isConfirmed)) {
+      return
+    }
+
+    void Promise.allSettled([
+      metadataQuery.refetch(),
+      entropyStateQuery.refetch(),
+      currentCardQuery.refetch(),
+      multiplierQuery.refetch(),
+      outcomeQuery.refetch(),
+      currentCardHandleQuery.refetch(),
+    ])
+  }, [
+    sessionId,
+    txHash,
+    isConfirmed,
+    metadataQuery,
+    entropyStateQuery,
+    currentCardQuery,
+    multiplierQuery,
+    outcomeQuery,
+    currentCardHandleQuery,
+  ])
 
   async function writeWithEstimatedGas(request: {
     address: `0x${string}`
@@ -373,10 +522,10 @@ export function HiLoGame() {
         <div className="glass-panel rounded-[32px] p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="font-heading text-xs uppercase tracking-[0.32em] text-cyan/75">
+              <p className="font-heading text-xs uppercase tracking-[0.32em] text-purple/75">
                 Encrypted Compare
               </p>
-              <h2 className="mt-3 font-heading text-3xl uppercase tracking-[0.16em] text-white">
+              <h2 className="mt-3 font-heading text-3xl uppercase tracking-[0.16em] text-text">
                 Climb The Deck
               </h2>
             </div>
@@ -396,7 +545,7 @@ export function HiLoGame() {
                 value={roundReady && currentCardValue ? formatCardValue(currentCardValue) : '??'}
               />
             </motion.div>
-            <div className="rounded-full border border-cyan/25 bg-cyan/10 px-5 py-3 text-center font-heading text-xs uppercase tracking-[0.28em] text-cyan">
+            <div className="rounded-full border border-purple/25 bg-purple/10 px-5 py-3 text-center font-heading text-xs uppercase tracking-[0.28em] text-purple">
               {!roundReady
                 ? activationLabel
                 : pendingGuess
@@ -420,18 +569,18 @@ export function HiLoGame() {
             <MetricCard label="Session Status" value={currentStatus} />
           </div>
 
-          <div className="mt-6 rounded-[24px] border border-white/10 bg-black/20 p-5">
+          <div className="mt-6 rounded-[24px] border border-borderLine/80 bg-panel/72 p-5">
             <div className="flex items-center justify-between gap-4">
-              <p className="font-heading text-xs uppercase tracking-[0.28em] text-slate-400">
+              <p className="font-heading text-xs uppercase tracking-[0.28em] text-muted/80">
                 Streak Pressure
               </p>
               <span className={`font-heading text-[11px] uppercase tracking-[0.24em] ${
-                roundReady && !pendingGuess ? 'text-cyan' : 'text-gold'
+                roundReady && !pendingGuess ? 'text-purple' : 'text-cyan'
               }`}>
                 {!roundReady ? 'Awaiting activation' : pendingGuess ? 'Waiting on decrypt' : 'Make the next call'}
               </span>
             </div>
-            <div className="mt-4 h-3 overflow-hidden rounded-full border border-white/10 bg-white/5">
+            <div className="mt-4 h-3 overflow-hidden rounded-full border border-borderLine/80 bg-canvas/45">
               <motion.div
                 className="h-full rounded-full bg-gradient-to-r from-cyan via-purple to-gold"
                 initial={{ width: 0 }}
@@ -498,7 +647,7 @@ export function HiLoGame() {
                   }
                   tone="primary"
                 />
-                <p className="text-xs leading-6 text-slate-400">
+                <p className="text-xs leading-6 text-muted/80">
                   Start encrypts a private 32-bit seed in your browser and submits the verified
                   ciphertext on-chain before the deck is initialized.
                 </p>
@@ -537,7 +686,11 @@ export function HiLoGame() {
                   }
                 />
                 <ActionButton
-                  label={pendingGuess && !guessFinalizeReady ? 'Result Processing...' : 'Finalize Guess'}
+                  label={
+                    pendingGuess && !guessFinalizeReady
+                      ? 'Result Processing...'
+                      : 'Finalize Guess'
+                  }
                   onClick={finalizeGuess}
                   disabled={
                     !walletReady ||
@@ -582,7 +735,7 @@ export function HiLoGame() {
           <StatusPanel
             message={txMessage}
             session={session}
-            finalizeHint="Activate the round after the entropy block lands. When a guess or cashout is processing, the finalize control unlocks once the private result is ready."
+            finalizeHint="Activate the round after the entropy block lands. Guesses and cashouts finalize once the contract-side decrypt result is ready on-chain."
           />
         </div>
       }

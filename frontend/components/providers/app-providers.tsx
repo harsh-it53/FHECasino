@@ -9,13 +9,7 @@ import { createWagmiConfig, supportedChains } from '@/lib/web3'
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient())
-  const [wagmiConfig] = useState(() =>
-    typeof window === 'undefined' ? null : createWagmiConfig()
-  )
-
-  if (!wagmiConfig) {
-    return <>{children}</>
-  }
+  const [wagmiConfig] = useState(() => createWagmiConfig())
 
   return (
     <WagmiProvider config={wagmiConfig}>

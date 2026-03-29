@@ -186,6 +186,17 @@ export const minesAbi = [
   },
   {
     type: 'function',
+    name: 'publishRevealResult',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'sessionId', type: 'bytes32' },
+      { name: 'revealCode', type: 'uint32' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [{ name: 'hitMine', type: 'bool' }],
+  },
+  {
+    type: 'function',
     name: 'requestCashout',
     stateMutability: 'nonpayable',
     inputs: [{ name: 'sessionId', type: 'bytes32' }],
@@ -267,6 +278,20 @@ export const minesAbi = [
       { name: 'ready', type: 'bool' },
     ],
   },
+  {
+    type: 'function',
+    name: 'getLastRevealWasMine',
+    stateMutability: 'view',
+    inputs: [{ name: 'sessionId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'getLastRevealCode',
+    stateMutability: 'view',
+    inputs: [{ name: 'sessionId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bytes32' }],
+  },
 ] as const
 
 export const crashAbi = [
@@ -319,6 +344,22 @@ export const crashAbi = [
   },
   {
     type: 'function',
+    name: 'publishCashoutResult',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'sessionId', type: 'bytes32' },
+      { name: 'cashoutAllowedCode', type: 'uint32' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [
+      { name: 'cashoutSucceeded', type: 'bool' },
+      { name: 'grossPayout', type: 'uint256' },
+      { name: 'netPayout', type: 'uint256' },
+      { name: 'houseFee', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
     name: 'requestCrashPointReveal',
     stateMutability: 'nonpayable',
     inputs: [{ name: 'sessionId', type: 'bytes32' }],
@@ -330,6 +371,17 @@ export const crashAbi = [
     stateMutability: 'nonpayable',
     inputs: [{ name: 'sessionId', type: 'bytes32' }],
     outputs: [{ name: 'crashPointBps', type: 'uint32' }],
+  },
+  {
+    type: 'function',
+    name: 'publishCrashPointReveal',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'sessionId', type: 'bytes32' },
+      { name: 'crashPointBps', type: 'uint32' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [{ name: 'publishedCrashPointBps', type: 'uint32' }],
   },
   {
     type: 'function',
@@ -370,6 +422,20 @@ export const crashAbi = [
     stateMutability: 'view',
     inputs: [{ name: 'sessionId', type: 'bytes32' }],
     outputs: [{ name: '', type: 'uint32' }],
+  },
+  {
+    type: 'function',
+    name: 'getLastCashoutAllowed',
+    stateMutability: 'view',
+    inputs: [{ name: 'sessionId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'getEncryptedCrashPoint',
+    stateMutability: 'view',
+    inputs: [{ name: 'sessionId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bytes32' }],
   },
   {
     type: 'function',
@@ -443,6 +509,24 @@ export const hiLoAbi = [
   },
   {
     type: 'function',
+    name: 'publishGuessResult',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'sessionId', type: 'bytes32' },
+      { name: 'currentCardValue', type: 'uint32' },
+      { name: 'outcomeCode', type: 'uint32' },
+      { name: 'currentCardSignature', type: 'bytes' },
+      { name: 'outcomeSignature', type: 'bytes' },
+    ],
+    outputs: [
+      { name: 'publishedOutcomeCode', type: 'uint32' },
+      { name: 'grossPayout', type: 'uint256' },
+      { name: 'netPayout', type: 'uint256' },
+      { name: 'houseFee', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
     name: 'requestCashout',
     stateMutability: 'nonpayable',
     inputs: [{ name: 'sessionId', type: 'bytes32' }],
@@ -496,6 +580,13 @@ export const hiLoAbi = [
   },
   {
     type: 'function',
+    name: 'getCurrentCard',
+    stateMutability: 'view',
+    inputs: [{ name: 'sessionId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bytes32' }],
+  },
+  {
+    type: 'function',
     name: 'readCurrentMultiplier',
     stateMutability: 'view',
     inputs: [{ name: 'sessionId', type: 'bytes32' }],
@@ -513,6 +604,13 @@ export const hiLoAbi = [
       { name: 'outcomeCode', type: 'uint32' },
       { name: 'ready', type: 'bool' },
     ],
+  },
+  {
+    type: 'function',
+    name: 'getLastOutcomeCode',
+    stateMutability: 'view',
+    inputs: [{ name: 'sessionId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bytes32' }],
   },
 ] as const
 
@@ -564,6 +662,23 @@ export const plinkoAbi = [
   },
   {
     type: 'function',
+    name: 'publishSettleResult',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'sessionId', type: 'bytes32' },
+      { name: 'pathSeed', type: 'uint32' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [
+      { name: 'publishedPathSeed', type: 'uint32' },
+      { name: 'finalSlot', type: 'uint8' },
+      { name: 'grossPayout', type: 'uint256' },
+      { name: 'netPayout', type: 'uint256' },
+      { name: 'houseFee', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
     name: 'plinkoMetadata',
     stateMutability: 'view',
     inputs: [{ name: 'sessionId', type: 'bytes32' }],
@@ -591,6 +706,13 @@ export const plinkoAbi = [
     stateMutability: 'view',
     inputs: [{ name: 'sessionId', type: 'bytes32' }],
     outputs: [{ name: '', type: 'uint32' }],
+  },
+  {
+    type: 'function',
+    name: 'getPathSeed',
+    stateMutability: 'view',
+    inputs: [{ name: 'sessionId', type: 'bytes32' }],
+    outputs: [{ name: '', type: 'bytes32' }],
   },
   {
     type: 'function',

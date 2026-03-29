@@ -2,7 +2,7 @@
 
 import { EncryptStep } from '@cofhe/sdk'
 import { motion } from 'framer-motion'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   useAccount,
   useBlockNumber,
@@ -54,6 +54,21 @@ function formatBlockCount(blocks: number) {
 }
 
 const SUSPENSE_PATH_BITS = [0, 1, 0, 1, 1, 0, 1, 0] as const
+
+const IDLE_PEG_STYLE = {
+  backgroundColor: 'var(--chart-4)',
+  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+} as const
+
+const PENDING_PEG_STYLE = {
+  backgroundColor: 'var(--ring)',
+  boxShadow: '0 0 14px rgba(255, 224, 194, 0.18)',
+} as const
+
+const RESOLVED_PEG_STYLE = {
+  backgroundColor: 'var(--primary)',
+  boxShadow: '0 0 18px rgba(255, 224, 194, 0.24)',
+} as const
 
 function buildBallFrames(pathBits: readonly number[], finalSlot?: number) {
   let rightCount = 0
@@ -249,6 +264,75 @@ export function PlinkoGame() {
             ? `${txLabel} submitted.`
             : null
 
+  const needsFastPolling = Boolean(
+    sessionId &&
+      (isBusy ||
+        !roundReady ||
+        pendingSettle ||
+        !resultRevealed ||
+        (entropyReadyBlock > 0 && !entropyWindowReady))
+  )
+
+  useEffect(() => {
+    if (!sessionId || !needsFastPolling) {
+      return
+    }
+
+    const refreshSessionState = () => {
+      void Promise.allSettled([
+        metadataQuery.refetch(),
+        entropyStateQuery.refetch(),
+        revealedPathSeedQuery.refetch(),
+        revealedFinalSlotQuery.refetch(),
+        pathSeedReadyQuery.refetch(),
+        finalSlotReadyQuery.refetch(),
+        multiplierReadyQuery.refetch(),
+      ])
+    }
+
+    refreshSessionState()
+    const intervalId = window.setInterval(refreshSessionState, 1250)
+
+    return () => window.clearInterval(intervalId)
+  }, [
+    sessionId,
+    needsFastPolling,
+    metadataQuery,
+    entropyStateQuery,
+    revealedPathSeedQuery,
+    revealedFinalSlotQuery,
+    pathSeedReadyQuery,
+    finalSlotReadyQuery,
+    multiplierReadyQuery,
+  ])
+
+  useEffect(() => {
+    if (!sessionId || (!txHash && !isConfirmed)) {
+      return
+    }
+
+    void Promise.allSettled([
+      metadataQuery.refetch(),
+      entropyStateQuery.refetch(),
+      revealedPathSeedQuery.refetch(),
+      revealedFinalSlotQuery.refetch(),
+      pathSeedReadyQuery.refetch(),
+      finalSlotReadyQuery.refetch(),
+      multiplierReadyQuery.refetch(),
+    ])
+  }, [
+    sessionId,
+    txHash,
+    isConfirmed,
+    metadataQuery,
+    entropyStateQuery,
+    revealedPathSeedQuery,
+    revealedFinalSlotQuery,
+    pathSeedReadyQuery,
+    finalSlotReadyQuery,
+    multiplierReadyQuery,
+  ])
+
   async function writeWithEstimatedGas(request: {
     address: `0x${string}`
     abi: typeof plinkoAbi
@@ -409,17 +493,26 @@ export function PlinkoGame() {
         <div className="glass-panel rounded-[32px] p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="font-heading text-xs uppercase tracking-[0.32em] text-cyan/75">
+              <p className="font-heading text-xs uppercase tracking-[0.32em] text-purple/75">
                 Seed To Path
               </p>
-              <h2 className="mt-3 font-heading text-3xl uppercase tracking-[0.16em] text-white">
+              <h2 className="mt-3 font-heading text-3xl uppercase tracking-[0.16em] text-text">
                 Reveal The Bounce
               </h2>
             </div>
             <StatusChip label={statusLabel} tone={statusTone} />
           </div>
 
-          <div className="relative mt-5 overflow-hidden rounded-[28px] border border-white/10 bg-black/20 p-6">
+          <div className="theme-subtle-surface relative mt-5 min-h-[430px] overflow-hidden rounded-[28px] p-6">
+            <div className="pointer-events-none absolute inset-x-10 top-8 bottom-24 rounded-[24px] bg-[radial-gradient(circle_at_top,rgba(255,224,194,0.08),transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]" />
+            {!sessionId ? (
+              <div className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center">
+                <div className="rounded-full border border-[color:var(--border)] bg-[color:var(--card)] px-4 py-2 font-heading text-[10px] uppercase tracking-[0.28em] text-[color:var(--muted-foreground)]">
+                  Start a drop to reveal the private bounce path
+                </div>
+              </div>
+            ) : null}
+
             {showSuspenseBall || showResolvedBall ? (
               <motion.div
                 key={ballAnimationKey}
@@ -442,15 +535,18 @@ export function PlinkoGame() {
                   repeat: showResolvedBall ? 0 : Infinity,
                   repeatDelay: 0.12,
                 }}
-                className={`pointer-events-none absolute z-20 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border shadow-[0_0_18px_rgba(34,211,238,0.5)] ${
-                  showResolvedBall
-                    ? 'border-cyan/70 bg-cyan'
-                    : 'border-gold/60 bg-gold'
-                }`}
+                className="pointer-events-none absolute z-20 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border"
+                style={{
+                  borderColor: showResolvedBall ? 'var(--primary)' : 'var(--ring)',
+                  backgroundColor: showResolvedBall ? 'var(--primary)' : 'var(--ring)',
+                  boxShadow: showResolvedBall
+                    ? '0 0 20px rgba(255, 224, 194, 0.28)'
+                    : '0 0 16px rgba(255, 224, 194, 0.18)',
+                }}
               />
             ) : null}
 
-            <div className="grid gap-4">
+            <div className="relative z-10 mt-10 grid gap-4">
               {Array.from({ length: 8 }, (_, row) => (
                 <div key={row} className="flex justify-center gap-3">
                   {Array.from({ length: row + 1 }, (_, peg) => (
@@ -472,22 +568,23 @@ export function PlinkoGame() {
                             : 1,
                       }}
                       transition={{ delay: row * 0.08, duration: 0.18 }}
-                      className={`h-3 w-3 rounded-full ${
+                      className="block h-3.5 w-3.5 rounded-full"
+                      style={
                         pendingSettle || resultRevealed
                           ? displayPathBits[row] === peg % 2
                             ? resultRevealed
-                              ? 'bg-cyan shadow-cyan'
-                              : 'bg-gold shadow-[0_0_12px_rgba(245,158,11,0.45)]'
-                            : 'bg-white/20'
-                          : 'bg-white/20'
-                      }`}
+                              ? RESOLVED_PEG_STYLE
+                              : PENDING_PEG_STYLE
+                            : IDLE_PEG_STYLE
+                          : IDLE_PEG_STYLE
+                      }
                     />
                   ))}
                 </div>
               ))}
             </div>
 
-            <div className="mt-6 grid grid-cols-9 gap-2">
+            <div className="relative z-10 mt-8 grid grid-cols-9 gap-2">
               {Array.from({ length: 9 }, (_, slot) => (
                 <motion.div
                   key={slot}
@@ -503,11 +600,27 @@ export function PlinkoGame() {
                   transition={{ delay: slot * 0.03, duration: 0.18 }}
                   className={`rounded-2xl border px-2 py-3 text-center ${
                     resultRevealed && revealedFinalSlot === slot
-                      ? 'border-cyan/50 bg-cyan/15 text-cyan'
+                      ? 'text-purple'
                       : pendingSettle && slot === 4
-                        ? 'border-gold/35 bg-gold/10 text-gold'
-                      : 'border-white/10 bg-white/5 text-slate-300'
+                        ? 'text-purple'
+                      : 'text-muted'
                   }`}
+                  style={
+                    resultRevealed && revealedFinalSlot === slot
+                      ? {
+                          borderColor: 'var(--primary)',
+                          backgroundColor: 'rgba(255, 224, 194, 0.08)',
+                        }
+                      : pendingSettle && slot === 4
+                        ? {
+                            borderColor: 'var(--ring)',
+                            backgroundColor: 'rgba(255, 224, 194, 0.06)',
+                          }
+                        : {
+                            borderColor: 'var(--border)',
+                            backgroundColor: 'var(--card)',
+                          }
+                  }
                 >
                   <p className="font-heading text-[10px] uppercase tracking-[0.24em]">
                     Slot {slot}
@@ -559,7 +672,7 @@ export function PlinkoGame() {
                   }
                   tone="primary"
                 />
-                <p className="text-xs leading-6 text-slate-400">
+                <p className="text-xs leading-6 text-muted/80">
                   Start encrypts a private 32-bit seed in your browser and submits the verified
                   ciphertext on-chain before the path is initialized.
                 </p>
@@ -601,7 +714,11 @@ export function PlinkoGame() {
                   }
                 />
                 <ActionButton
-                  label={pendingSettle && !settleReady ? 'Drop Processing...' : 'Finalize Settle'}
+                  label={
+                    pendingSettle && !settleReady
+                      ? 'Drop Processing...'
+                      : 'Finalize Settle'
+                  }
                   onClick={finalizeSettle}
                   disabled={
                     !walletReady ||
@@ -611,7 +728,7 @@ export function PlinkoGame() {
                     isBusy
                   }
                 />
-                <p className="text-xs leading-6 text-slate-400">
+                <p className="text-xs leading-6 text-muted/80">
                   Activation now immediately follows with the settle request, so the ball animation
                   starts as soon as the round goes live. Use finalize once the decrypt is ready to
                   lock in the revealed slot.
@@ -623,7 +740,7 @@ export function PlinkoGame() {
           <StatusPanel
             message={txMessage}
             session={session}
-            finalizeHint="Activate the drop after the entropy block lands. The client auto-requests settlement, then finalize unlocks once the secure replay result is ready."
+            finalizeHint="Activate the drop after the entropy block lands. The contract requests settlement, then finalize unlocks once the decrypt result is ready on-chain."
           />
         </div>
       }

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.25;
 
 import "@fhenixprotocol/cofhe-contracts/FHE.sol";
+import {ITaskManager} from "@fhenixprotocol/cofhe-contracts/ICofhe.sol";
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -13,6 +14,9 @@ import {IFHECasinoVault} from "../vault/IFHECasinoVault.sol";
 abstract contract FHEGameBase is Ownable2Step, Pausable, ReentrancyGuard {
     using SafeCast for uint256;
 
+    address internal constant DEFAULT_COFHE_TASK_MANAGER_ADDRESS =
+        0xeA30c4B8b44078Bbf8a6ef5b9f1eC1626C7848D9;
+
     uint16 public constant BPS_DENOMINATOR = 10_000;
     uint16 public constant MAX_HOUSE_EDGE_BPS = 500;
 
@@ -21,6 +25,7 @@ abstract contract FHEGameBase is Ownable2Step, Pausable, ReentrancyGuard {
     error InvalidBetLimits(uint256 minBet, uint256 maxBet);
     error InvalidHouseEdge(uint16 requestedBps);
     error InvalidMaxPayout(uint256 requested, uint256 wager);
+    error InvalidTaskManager(address taskManager);
     error InvalidSettlementStatus(SessionStatus status);
     error InvalidVault(address vault);
     error SessionNotActive(bytes32 sessionId, SessionStatus status);
@@ -28,6 +33,7 @@ abstract contract FHEGameBase is Ownable2Step, Pausable, ReentrancyGuard {
     error SessionPlayerMismatch(bytes32 sessionId, address expected, address actual);
 
     IFHECasinoVault public vault;
+    address public cofheTaskManager;
     uint16 public houseEdgeBps;
     uint256 public minBet;
     uint256 public maxBet;
@@ -65,6 +71,7 @@ abstract contract FHEGameBase is Ownable2Step, Pausable, ReentrancyGuard {
         uint256 netPayout,
         uint256 houseFee
     );
+    event CofheTaskManagerUpdated(address indexed previousTaskManager, address indexed newTaskManager);
     event VaultUpdated(address indexed previousVault, address indexed newVault);
 
     constructor(
@@ -74,6 +81,7 @@ abstract contract FHEGameBase is Ownable2Step, Pausable, ReentrancyGuard {
         uint256 initialMinBet,
         uint256 initialMaxBet
     ) Ownable(initialOwner) {
+        _setCofheTaskManager(DEFAULT_COFHE_TASK_MANAGER_ADDRESS);
         _setVault(vaultAddress);
         _setHouseEdge(initialHouseEdgeBps);
         _setBetLimits(initialMinBet, initialMaxBet);
@@ -98,6 +106,10 @@ abstract contract FHEGameBase is Ownable2Step, Pausable, ReentrancyGuard {
 
     function setBetLimits(uint256 newMinBet, uint256 newMaxBet) external onlyOwner {
         _setBetLimits(newMinBet, newMaxBet);
+    }
+
+    function setCofheTaskManager(address newTaskManager) external onlyOwner {
+        _setCofheTaskManager(newTaskManager);
     }
 
     function nextSessionNonce(address player) external view returns (uint64) {
@@ -198,17 +210,38 @@ abstract contract FHEGameBase is Ownable2Step, Pausable, ReentrancyGuard {
 
     function _scheduleDecryptForCaller(ebool ciphertext) internal {
         _grantViewerAccess(msg.sender, ciphertext);
-        FHE.decrypt(ciphertext);
+        _scheduleDecryptForContract(ciphertext);
     }
 
     function _scheduleDecryptForCaller(euint8 ciphertext) internal {
         _grantViewerAccess(msg.sender, ciphertext);
-        FHE.decrypt(ciphertext);
+        _scheduleDecryptForContract(ciphertext);
     }
 
     function _scheduleDecryptForCaller(euint32 ciphertext) internal {
         _grantViewerAccess(msg.sender, ciphertext);
-        FHE.decrypt(ciphertext);
+        _scheduleDecryptForContract(ciphertext);
+    }
+
+    function _scheduleDecryptForContract(ebool ciphertext) internal {
+        FHE.allowThis(ciphertext);
+        ITaskManager(cofheTaskManager).createDecryptTask(
+            uint256(ebool.unwrap(ciphertext)), address(this)
+        );
+    }
+
+    function _scheduleDecryptForContract(euint8 ciphertext) internal {
+        FHE.allowThis(ciphertext);
+        ITaskManager(cofheTaskManager).createDecryptTask(
+            uint256(euint8.unwrap(ciphertext)), address(this)
+        );
+    }
+
+    function _scheduleDecryptForContract(euint32 ciphertext) internal {
+        FHE.allowThis(ciphertext);
+        ITaskManager(cofheTaskManager).createDecryptTask(
+            uint256(euint32.unwrap(ciphertext)), address(this)
+        );
     }
 
     function _applyHouseEdge(uint128 wager, uint256 grossPayout)
@@ -256,6 +289,16 @@ abstract contract FHEGameBase is Ownable2Step, Pausable, ReentrancyGuard {
         emit HouseEdgeUpdated(previousHouseEdgeBps, newHouseEdgeBps);
     }
 
+    function _setCofheTaskManager(address newTaskManager) internal {
+        if (newTaskManager == address(0)) {
+            revert InvalidTaskManager(newTaskManager);
+        }
+
+        address previousTaskManager = cofheTaskManager;
+        cofheTaskManager = newTaskManager;
+        emit CofheTaskManagerUpdated(previousTaskManager, newTaskManager);
+    }
+
     function _setBetLimits(uint256 newMinBet, uint256 newMaxBet) internal {
         if (newMinBet == 0 || newMinBet > newMaxBet) {
             revert InvalidBetLimits(newMinBet, newMaxBet);
@@ -292,4 +335,3 @@ abstract contract FHEGameBase is Ownable2Step, Pausable, ReentrancyGuard {
         FHE.allowThis(ENCRYPTED_ONE_U32);
     }
 }
-

@@ -26,6 +26,7 @@ contract FHEPlinko is FHEGameBase, FHEHybridEntropy {
     error DecryptResultNotReady(bytes32 sessionId);
     error GameAlreadyActivated(bytes32 sessionId);
     error GameNotReady(bytes32 sessionId, uint64 readyBlock);
+    error InvalidSettleSignature(bytes32 sessionId);
     error InvalidPathSeed(uint32 provided, uint32 maxPathSeed);
     error NoPendingSettle(bytes32 sessionId);
     error PendingSettle(bytes32 sessionId);
@@ -169,12 +170,7 @@ contract FHEPlinko is FHEGameBase, FHEHybridEntropy {
         metadata.pendingSettle = true;
 
         _grantViewerAccess(msg.sender, _pathSeed[sessionId]);
-        _grantViewerAccess(msg.sender, _finalSlot[sessionId]);
-        _grantViewerAccess(msg.sender, _currentMultiplierBps[sessionId]);
-
-        FHE.decrypt(_pathSeed[sessionId]);
-        FHE.decrypt(_finalSlot[sessionId]);
-        FHE.decrypt(_currentMultiplierBps[sessionId]);
+        _scheduleDecryptForContract(_pathSeed[sessionId]);
 
         emit PlinkoSettleRequested(sessionId, session.player);
     }
@@ -200,21 +196,63 @@ contract FHEPlinko is FHEGameBase, FHEHybridEntropy {
 
         bool pathSeedReady;
         (pathSeed, pathSeedReady) = FHE.getDecryptResultSafe(_pathSeed[sessionId]);
-        uint32 decryptedSlot;
-        bool slotReady;
-        (decryptedSlot, slotReady) = FHE.getDecryptResultSafe(_finalSlot[sessionId]);
-        uint32 multiplierBps;
-        bool multiplierReady;
-        (multiplierBps, multiplierReady) = FHE.getDecryptResultSafe(_currentMultiplierBps[sessionId]);
-
-        if (!pathSeedReady || !slotReady || !multiplierReady) {
+        if (!pathSeedReady) {
             revert DecryptResultNotReady(sessionId);
         }
 
+        return _finalizeSettleWithPathSeed(sessionId, session, metadata, pathSeed);
+    }
+
+    function publishSettleResult(bytes32 sessionId, uint32 pathSeed, bytes calldata signature)
+        external
+        whenNotPaused
+        nonReentrant
+        returns (
+            uint32 publishedPathSeed,
+            uint8 finalSlot,
+            uint256 grossPayout,
+            uint256 netPayout,
+            uint256 houseFee
+        )
+    {
+        GameSession storage session = _requirePlayerActiveSession(sessionId, msg.sender);
+        PlinkoMetadata storage metadata = plinkoMetadata[sessionId];
+
+        if (!metadata.pendingSettle) {
+            revert NoPendingSettle(sessionId);
+        }
+        if (
+            !FHE.verifyDecryptResultSafe(_pathSeed[sessionId], pathSeed, signature)
+        ) {
+            revert InvalidSettleSignature(sessionId);
+        }
+
+        FHE.publishDecryptResult(_pathSeed[sessionId], pathSeed, signature);
+        (publishedPathSeed, finalSlot, grossPayout, netPayout, houseFee) =
+            _finalizeSettleWithPathSeed(sessionId, session, metadata, pathSeed);
+    }
+
+    function _finalizeSettleWithPathSeed(
+        bytes32 sessionId,
+        GameSession storage session,
+        PlinkoMetadata storage metadata,
+        uint32 pathSeed
+    )
+        internal
+        returns (
+            uint32 publishedPathSeed,
+            uint8 finalSlot,
+            uint256 grossPayout,
+            uint256 netPayout,
+            uint256 houseFee
+        )
+    {
+        _validatePathSeed(pathSeed);
         metadata.pendingSettle = false;
         metadata.resultRevealed = true;
 
-        finalSlot = uint8(decryptedSlot);
+        finalSlot = _popcount8(pathSeed);
+        uint32 multiplierBps = _slotMultiplierBps(finalSlot);
         revealedPathSeed[sessionId] = pathSeed;
         revealedFinalSlot[sessionId] = finalSlot;
 
@@ -234,6 +272,8 @@ contract FHEPlinko is FHEGameBase, FHEHybridEntropy {
             netPayout,
             houseFee
         );
+
+        publishedPathSeed = pathSeed;
     }
 
     function getPathSeed(bytes32 sessionId) external view returns (euint32) {
@@ -258,7 +298,11 @@ contract FHEPlinko is FHEGameBase, FHEHybridEntropy {
 
     function readFinalSlot(bytes32 sessionId) external view returns (uint32 finalSlot, bool ready) {
         _validateSessionPlayer(sessionId, msg.sender);
-        (finalSlot, ready) = FHE.getDecryptResultSafe(_finalSlot[sessionId]);
+        uint32 pathSeed;
+        (pathSeed, ready) = FHE.getDecryptResultSafe(_pathSeed[sessionId]);
+        if (ready) {
+            finalSlot = _popcount8(pathSeed);
+        }
     }
 
     function readCurrentMultiplier(bytes32 sessionId)
@@ -267,7 +311,11 @@ contract FHEPlinko is FHEGameBase, FHEHybridEntropy {
         returns (uint32 multiplierBps, bool ready)
     {
         _validateSessionPlayer(sessionId, msg.sender);
-        (multiplierBps, ready) = FHE.getDecryptResultSafe(_currentMultiplierBps[sessionId]);
+        uint32 pathSeed;
+        (pathSeed, ready) = FHE.getDecryptResultSafe(_pathSeed[sessionId]);
+        if (ready) {
+            multiplierBps = _slotMultiplierBps(_popcount8(pathSeed));
+        }
     }
 
     function multiplierForSlot(uint8 slot) external pure returns (uint32) {
@@ -357,6 +405,12 @@ contract FHEPlinko is FHEGameBase, FHEHybridEntropy {
         if (slot == 7) return SLOT_7_MULTIPLIER_BPS;
         if (slot == 8) return SLOT_8_MULTIPLIER_BPS;
         revert InvalidPathSeed(slot, SLOT_COUNT - 1);
+    }
+
+    function _popcount8(uint32 pathSeed) internal pure returns (uint8 count) {
+        for (uint8 row = 0; row < PEG_ROWS; row++) {
+            count += uint8((pathSeed >> row) & 1);
+        }
     }
 
     function _requireExistingSession(bytes32 sessionId) internal view {

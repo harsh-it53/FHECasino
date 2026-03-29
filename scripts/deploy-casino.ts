@@ -2,7 +2,7 @@ import hre from 'hardhat'
 import { isAddress, parseEther } from 'ethers'
 import { ACL__factory, TaskManager__factory } from '../typechain-types'
 
-const TASK_MANAGER_ADDRESS = '0xeA30c4B8b44078Bbf8a6ef5b9f1eC1626C7848D9'
+const DEFAULT_TASK_MANAGER_ADDRESS = '0xeA30c4B8b44078Bbf8a6ef5b9f1eC1626C7848D9'
 
 function readOptionalBankroll(): bigint {
   const rawValue = process.env.INITIAL_BANKROLL_ETH?.trim()
@@ -15,27 +15,41 @@ function readOptionalBankroll(): bigint {
 
 async function bootstrapHardhatCofhe(ownerAddress: string) {
   const taskManagerArtifact = await hre.artifacts.readArtifact('TaskManager')
+  const taskManagerAddress = resolveTaskManagerAddress()
 
   try {
     await hre.network.provider.send('hardhat_setCode', [
-      TASK_MANAGER_ADDRESS,
+      taskManagerAddress,
       taskManagerArtifact.deployedBytecode,
     ])
   } catch (error) {
     await hre.network.provider.send('evm_setAccountCode', [
-      TASK_MANAGER_ADDRESS,
+      taskManagerAddress,
       taskManagerArtifact.deployedBytecode,
     ])
   }
 
   const [owner] = await hre.ethers.getSigners()
-  const taskManager = TaskManager__factory.connect(TASK_MANAGER_ADDRESS, owner)
+  const taskManager = TaskManager__factory.connect(taskManagerAddress, owner)
   await taskManager.initialize(ownerAddress)
   await taskManager.setLogOps(false)
 
   const acl = await new ACL__factory(owner).deploy(ownerAddress)
   await acl.waitForDeployment()
   await taskManager.setACLContract(await acl.getAddress())
+}
+
+function resolveTaskManagerAddress() {
+  const configuredAddress = process.env.COFHE_TASK_MANAGER_ADDRESS?.trim()
+  if (!configuredAddress) {
+    return DEFAULT_TASK_MANAGER_ADDRESS
+  }
+
+  if (!isAddress(configuredAddress)) {
+    throw new Error('COFHE_TASK_MANAGER_ADDRESS must be a valid address')
+  }
+
+  return configuredAddress
 }
 
 async function main() {
@@ -48,11 +62,13 @@ async function main() {
   }
 
   const initialBankroll = readOptionalBankroll()
+  const taskManagerAddress = resolveTaskManagerAddress()
 
   console.log(`Deploying FHE Casino with: ${deployer.address}`)
   console.log(`Owner: ${owner}`)
   console.log(`Network: ${hre.network.name}`)
   console.log(`Initial bankroll: ${hre.ethers.formatEther(initialBankroll)} ETH`)
+  console.log(`CoFHE task manager: ${taskManagerAddress}`)
 
   if (isLocalHardhat) {
     await bootstrapHardhatCofhe(owner)
@@ -87,6 +103,14 @@ async function main() {
     crash: await crash.getAddress(),
     hilo: await hiLo.getAddress(),
     plinko: await plinko.getAddress(),
+  }
+
+  for (const game of [mines, crash, hiLo, plinko]) {
+    const currentTaskManager = await game.cofheTaskManager()
+    if (currentTaskManager.toLowerCase() !== taskManagerAddress.toLowerCase()) {
+      const tx = await game.setCofheTaskManager(taskManagerAddress)
+      await tx.wait()
+    }
   }
 
   console.log('')

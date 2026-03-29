@@ -2,7 +2,7 @@ import hre from 'hardhat'
 import { parseEther } from 'ethers'
 import { readAddressEnv } from './config'
 
-const DEFAULT_WAGER_ETH = '0.001'
+const DEFAULT_WAGER_ETH = '0.000001'
 const DEFAULT_MINE_COUNT = 3
 const POLL_INTERVAL_MS = 12_000
 const MAX_POLLS = 18
@@ -40,7 +40,11 @@ function sleep(ms: number) {
 }
 
 function readSmokeWager() {
-  return parseEther(process.env.SMOKE_WAGER_ETH?.trim() || DEFAULT_WAGER_ETH)
+  return parseEther(
+    process.env.SMOKE_WAGER_ETH?.trim()
+      || process.env.MIN_BET_ETH?.trim()
+      || DEFAULT_WAGER_ETH
+  )
 }
 
 function readMineCount() {
