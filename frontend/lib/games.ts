@@ -21,7 +21,7 @@ export const games: GameMeta[] = [
     houseEdge: '1.0%',
     minBet: '0.001 ETH',
     maxPayout: '~24x',
-    players: '42 active',
+    players: 'Sepolia Testnet',
     live: '1.00x',
   },
   {
@@ -32,7 +32,7 @@ export const games: GameMeta[] = [
     houseEdge: '1.0%',
     minBet: '0.001 ETH',
     maxPayout: '1000x',
-    players: '59 active',
+    players: 'Sepolia Testnet',
     live: '2.34x',
   },
   {
@@ -43,7 +43,7 @@ export const games: GameMeta[] = [
     houseEdge: '1.0%',
     minBet: '0.001 ETH',
     maxPayout: '~613x',
-    players: '26 active',
+    players: 'Sepolia Testnet',
     live: '3 streak',
   },
   {
@@ -54,7 +54,7 @@ export const games: GameMeta[] = [
     houseEdge: '1.0%',
     minBet: '0.001 ETH',
     maxPayout: '100x',
-    players: '31 active',
+    players: 'Sepolia Testnet',
     live: 'Slot 4',
   },
 ]

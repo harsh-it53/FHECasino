@@ -158,7 +158,7 @@ export function MinesGame() {
   const entropyWindowReady = entropyState?.[1] ?? false
   const safeReveals = safeReveal?.[1]
     ? Number(safeReveal[0])
-    : countOpenedSafeTiles(openedTiles, session)
+    : Math.max(0, countOpenedSafeTiles(openedTiles, session) - (pendingReveal ? 1 : 0))
   const currentMultiplierBps = readableMultiplier?.[1]
     ? Number(readableMultiplier[0])
     : computeMinesMultiplierBps(mineCount, safeReveals)
@@ -604,7 +604,7 @@ export function MinesGame() {
                     showMine
                       ? 'border-danger/60 bg-danger/20 text-danger'
                       : showPendingTile
-                        ? 'border-cyan/45 bg-cyan/12 text-cyan'
+                        ? 'border-cyan/45 bg-cyan/12 text-cyan animate-pulse font-medium'
                         : isQueuedTile
                           ? 'border-purple/50 bg-purple/12 text-purple'
                       : showConfirmedSafe
@@ -617,7 +617,7 @@ export function MinesGame() {
                   {showMine
                     ? 'Mine'
                     : showPendingTile
-                      ? '...'
+                      ? 'Decrypting'
                       : isQueuedTile
                         ? 'Queued'
                         : showConfirmedSafe
